@@ -600,7 +600,7 @@ extern ABC_DLL int                Abc_NtkCheckUniqueCiNames( Abc_Ntk_t * pNtk );
 extern ABC_DLL int                Abc_NtkCheckUniqueCoNames( Abc_Ntk_t * pNtk );
 extern ABC_DLL int                Abc_NtkCheckUniqueCioNames( Abc_Ntk_t * pNtk );
 /*=== abcCollapse.c ==========================================================*/
-extern ABC_DLL Abc_Ntk_t *        Abc_NtkCollapse( Abc_Ntk_t * pNtk, int fBddSizeMax, int fDualRail, int fReorder, int fReverse, int fVerbose );
+extern ABC_DLL Abc_Ntk_t *        Abc_NtkCollapse( Abc_Ntk_t * pNtk, int fBddSizeMax, int fDualRail, int fReorder, int fReverse, int fDumpOrder, int fVerbose );
 extern ABC_DLL Abc_Ntk_t *        Abc_NtkCollapseSat( Abc_Ntk_t * pNtk, int nCubeLim, int nBTLimit, int nCostMax, int fCanon, int fReverse, int fCnfShared, int fVerbose );
 extern ABC_DLL Gia_Man_t *        Abc_NtkClpGia( Abc_Ntk_t * pNtk );
 /*=== abcCut.c ==========================================================*/
@@ -671,7 +671,7 @@ extern ABC_DLL Abc_Ntk_t *        Abc_NtkFraigRestore( int nPatsRand, int nPatsD
 extern ABC_DLL void               Abc_NtkFraigStoreClean();
 /*=== abcFunc.c ==========================================================*/
 extern ABC_DLL int                Abc_NtkSopToBdd( Abc_Ntk_t * pNtk );
-extern ABC_DLL int                Abc_NtkBddToSop( Abc_Ntk_t * pNtk, int fMode, int nCubeLimit );
+extern ABC_DLL int                Abc_NtkBddToSop( Abc_Ntk_t * pNtk, int fMode, int nCubeLimit, int fCubeSort );
 extern ABC_DLL void               Abc_NodeBddToCnf( Abc_Obj_t * pNode, Mem_Flex_t * pMmMan, Vec_Str_t * vCube, int fAllPrimes, char ** ppSop0, char ** ppSop1 );
 extern ABC_DLL void               Abc_NtkLogicMakeDirectSops( Abc_Ntk_t * pNtk );
 extern ABC_DLL int                Abc_NtkSopToAig( Abc_Ntk_t * pNtk );
@@ -752,6 +752,7 @@ extern ABC_DLL void               Abc_NtkAddDummyPiNames( Abc_Ntk_t * pNtk );
 extern ABC_DLL void               Abc_NtkAddDummyPoNames( Abc_Ntk_t * pNtk );
 extern ABC_DLL void               Abc_NtkAddDummyBoxNames( Abc_Ntk_t * pNtk );
 extern ABC_DLL void               Abc_NtkShortNames( Abc_Ntk_t * pNtk );
+extern ABC_DLL void               Abc_NtkCleanNames( Abc_Ntk_t * pNtk );
 extern ABC_DLL void               Abc_NtkStartNameIds( Abc_Ntk_t * p );
 extern ABC_DLL void               Abc_NtkTransferNameIds( Abc_Ntk_t * p, Abc_Ntk_t * pNew );
 extern ABC_DLL void               Abc_NtkUpdateNameIds( Abc_Ntk_t * p );
@@ -761,7 +762,7 @@ extern ABC_DLL Abc_Ntk_t *        Abc_NtkToNetlist( Abc_Ntk_t * pNtk );
 extern ABC_DLL Abc_Ntk_t *        Abc_NtkToNetlistBench( Abc_Ntk_t * pNtk );
 /*=== abcNtbdd.c ==========================================================*/
 extern ABC_DLL Abc_Ntk_t *        Abc_NtkDeriveFromBdd( void * dd, void * bFunc, char * pNamePo, Vec_Ptr_t * vNamesPi );
-extern ABC_DLL Abc_Ntk_t *        Abc_NtkBddToMuxes( Abc_Ntk_t * pNtk, int fGlobal, int Limit );
+extern ABC_DLL Abc_Ntk_t *        Abc_NtkBddToMuxes( Abc_Ntk_t * pNtk, int fGlobal, int Limit, int fUseAdd );
 extern ABC_DLL void *             Abc_NtkBuildGlobalBdds( Abc_Ntk_t * pNtk, int fBddSizeMax, int fDropInternal, int fReorder, int fReverse, int fVerbose );
 extern ABC_DLL void *             Abc_NtkFreeGlobalBdds( Abc_Ntk_t * pNtk, int fFreeMan );
 extern ABC_DLL int                Abc_NtkSizeOfGlobalBdds( Abc_Ntk_t * pNtk );

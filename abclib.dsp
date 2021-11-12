@@ -2366,6 +2366,122 @@ SOURCE=.\src\sat\glucose\Vec.h
 SOURCE=.\src\sat\glucose\XAlloc.h
 # End Source File
 # End Group
+# Begin Group "glucose2"
+
+# PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\AbcGlucose2.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\AbcGlucose2.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\AbcGlucoseCmd2.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Alg.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Alloc.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\BoundedQueue.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\CGlucose.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\CGlucoseCore.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Constants.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Dimacs.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Glucose2.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Heap.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\IntTypes.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Map.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Options.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Options2.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\ParseUtils.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\pstdint.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Queue.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\SimpSolver.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\SimpSolver2.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Solver.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\SolverTypes.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Sort.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\System.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\System2.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\Vec.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\sat\glucose2\XAlloc.h
+# End Source File
+# End Group
 # End Group
 # Begin Group "opt"
 
@@ -4787,6 +4903,10 @@ SOURCE=.\src\aig\gia\giaCSat2.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaCSat3.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaCSatOld.c
 # End Source File
 # Begin Source File
@@ -4796,6 +4916,10 @@ SOURCE=.\src\aig\gia\giaCTas.c
 # Begin Source File
 
 SOURCE=.\src\aig\gia\giaCut.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaDecs.c
 # End Source File
 # Begin Source File
 
@@ -4943,6 +5067,14 @@ SOURCE=.\src\aig\gia\giaMini.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaMinLut.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaMinLut2.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaMuxes.c
 # End Source File
 # Begin Source File
@@ -4963,6 +5095,10 @@ SOURCE=.\src\aig\gia\giaPat.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaPat2.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaPf.c
 # End Source File
 # Begin Source File
@@ -4971,7 +5107,23 @@ SOURCE=.\src\aig\gia\giaQbf.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaReshape1.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaReshape2.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaResub.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaResub2.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaResub3.c
 # End Source File
 # Begin Source File
 
@@ -5039,14 +5191,6 @@ SOURCE=.\src\aig\gia\giaSim2.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\src\aig\gia\giaSim4.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\src\aig\gia\giaSim5.c
-# End Source File
-# Begin Source File
-
 SOURCE=.\src\aig\gia\giaSimBase.c
 # End Source File
 # Begin Source File
@@ -5067,6 +5211,10 @@ SOURCE=.\src\aig\gia\giaStg.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaStoch.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaStr.c
 # End Source File
 # Begin Source File
@@ -5076,6 +5224,10 @@ SOURCE=.\src\aig\gia\giaSupMin.c
 # Begin Source File
 
 SOURCE=.\src\aig\gia\giaSupp.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaSupps.c
 # End Source File
 # Begin Source File
 
@@ -5411,11 +5563,23 @@ SOURCE=.\src\proof\cec\cecSatG.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\proof\cec\cecSatG2.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\proof\cec\cecSeq.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\proof\cec\cecSim.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\proof\cec\cecSolve.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\proof\cec\cecSolveG.c
 # End Source File
 # Begin Source File
 

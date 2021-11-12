@@ -35,8 +35,6 @@ ABC_NAMESPACE_IMPL_START
 ///                        DECLARATIONS                              ///
 ////////////////////////////////////////////////////////////////////////
  
-#define ACB_LAST_NAME_ID 14
-
 typedef enum {
     ACB_NONE = 0,  // 0:  unused
     ACB_MODULE,    // 1:  "module"
@@ -52,6 +50,8 @@ typedef enum {
     ACB_NOR,       // 11: "nor"
     ACB_XOR,       // 12: "xor"
     ACB_XNOR,      // 13: "xnor"
+    ACB_MUX,       // 14: "_HMUX"
+    ACB_DC,        // 15: "_DC"
     ACB_UNUSED     // 14: unused
 } Acb_KeyWords_t; 
 
@@ -70,6 +70,8 @@ static inline char * Acb_Num2Name( int i )
     if ( i == 11 )  return "nor";
     if ( i == 12 )  return "xor";
     if ( i == 13 )  return "xnor";
+    if ( i == 14 )  return "_HMUX";
+    if ( i == 15 )  return "_DC";
     return NULL;
 }
 
@@ -83,6 +85,8 @@ static inline int Acb_Type2Oper( int i )
     if ( i == 11 )  return ABC_OPER_BIT_NOR;
     if ( i == 12 )  return ABC_OPER_BIT_XOR;
     if ( i == 13 )  return ABC_OPER_BIT_NXOR;
+    if ( i == 14 )  return ABC_OPER_BIT_MUX;
+    if ( i == 15 )  return ABC_OPER_TRI;
     assert( 0 );
     return -1;
 }
@@ -91,6 +95,7 @@ static inline char * Acb_Oper2Name( int i )
 {
     if ( i == ABC_OPER_CONST_F  )  return "const0";
     if ( i == ABC_OPER_CONST_T  )  return "const1";
+    if ( i == ABC_OPER_CONST_X  )  return "constX";
     if ( i == ABC_OPER_BIT_BUF  )  return "buf";
     if ( i == ABC_OPER_BIT_INV  )  return "not";
     if ( i == ABC_OPER_BIT_AND  )  return "and";
@@ -99,6 +104,8 @@ static inline char * Acb_Oper2Name( int i )
     if ( i == ABC_OPER_BIT_NOR  )  return "nor";
     if ( i == ABC_OPER_BIT_XOR  )  return "xor";
     if ( i == ABC_OPER_BIT_NXOR )  return "xnor";
+    if ( i == ABC_OPER_BIT_MUX )   return "mux";
+    if ( i == ABC_OPER_TRI )       return "_DC";
     assert( 0 );
     return NULL;
 }
@@ -138,15 +145,28 @@ char * pLibStr[25] = {
     "GATE zero       0       O=CONST0;\n"
     "GATE one        0       O=CONST1;\n"
 };
-void Acb_IntallLibrary()
+char * pLibStr2[25] = {
+    "GATE buf        1       O=a;            PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE inv        1       O=!a;           PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE and2       1       O=a*b;          PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE or2        1       O=a+b;          PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE nand2      1       O=!(a*b);       PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE nor2       1       O=!(a+b);       PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE xor        1       O=!a*b+a*!b;    PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE xnor       1       O=a*b+!a*!b;    PIN * INV 1 999 1.0 0.0 1.0 0.0\n"
+    "GATE zero       0       O=CONST0;\n"
+    "GATE one        0       O=CONST1;\n"
+};
+void Acb_IntallLibrary( int f2Ins )
 {
     extern Mio_Library_t * Mio_LibraryReadBuffer( char * pBuffer, int fExtendedFormat, st__table * tExcludeGate, int fVerbose );
     Mio_Library_t * pLib;
     int i;
     // create library string
     Vec_Str_t * vLibStr = Vec_StrAlloc( 1000 );
-    for ( i = 0; pLibStr[i]; i++ )
-        Vec_StrAppend( vLibStr, pLibStr[i] );
+    char ** ppLibStr = f2Ins ? pLibStr2 : pLibStr;
+    for ( i = 0; ppLibStr[i]; i++ )
+        Vec_StrAppend( vLibStr, ppLibStr[i] );
     Vec_StrPush( vLibStr, '\0' );
     // create library
     pLib = Mio_LibraryReadBuffer( Vec_StrArray(vLibStr), 0, NULL, 0 );
@@ -190,17 +210,78 @@ Vec_Int_t * Acb_VerilogSimpleLex( char * pFileName, Abc_Nam_t * pNames )
     Vec_Int_t * vBuffer = Vec_IntAlloc( 1000 );
     char * pBuffer = Extra_FileReadContents( pFileName );
     char * pToken, * pStart, * pLimit = pBuffer + strlen(pBuffer);
+    int i, iToken, RLeft = -1, RRight = -1;
     if ( pBuffer == NULL )
         return NULL;
     Acb_VerilogRemoveComments( pBuffer );
     pToken = strtok( pBuffer, "  \n\r\t(),;=" );
     while ( pToken )
     {
-        int iToken = Abc_NamStrFindOrAdd( pNames, pToken, NULL );
+        if ( 0 )
+        {
+            if ( !strcmp(pToken, "assign") )
+            {
+                int fBuffer = 0;
+                int nToks = 0, pToks[4];
+                while ( 1 )
+                {
+                    pToken = strtok( NULL, "  \n\r\t(),=~&" );
+                    if ( pToken[0] == ';' )
+                        break;
+                    if ( pToken[strlen(pToken)-1] == ';' )
+                    {
+                        pToken[strlen(pToken)-1] = 0;
+                        assert( nToks < 3 );
+                        pToks[nToks++] = Abc_NamStrFindOrAdd( pNames, pToken, NULL );
+                        fBuffer = 1;
+                        break;
+                    }
+                    else
+                    {
+                        assert( nToks < 3 );
+                        pToks[nToks++] = Abc_NamStrFindOrAdd( pNames, pToken, NULL );
+                    }
+                }
+                assert( nToks == 2 || nToks == 3 );
+                Vec_IntPush( vBuffer, fBuffer ? ACB_AND : ACB_NAND );
+                Vec_IntPush( vBuffer, pToks[0] );
+                Vec_IntPush( vBuffer, pToks[1] );
+                Vec_IntPush( vBuffer, nToks == 3 ? pToks[2] : pToks[1] );
+                pToken = strtok( NULL, "  \n\r\t(),;=" );
+                continue;
+            }
+        }
+
+        if ( pToken[0] == '[' )
+        {
+            assert( RLeft == -1 );
+            RLeft  = atoi(pToken+1);
+            RRight = atoi(strstr(pToken,":")+1);
+            pToken = strtok( NULL, "  \n\r\t(),;=" );
+            continue;
+        }
+        if ( pToken[0] == '\\' )
+            pToken++;
         if ( !strcmp(pToken, "assign") )
-            Vec_IntPush( vBuffer, ACB_BUF );
+            iToken = ACB_BUF;
         else
-            Vec_IntPush( vBuffer, iToken );
+            iToken = Abc_NamStrFindOrAdd( pNames, pToken, NULL );
+        if ( iToken < ACB_UNUSED )
+            RLeft = RRight = -1;
+        else if ( RLeft != -1 )
+        {
+            char Buffer[1000];
+            assert( strlen(pToken) < 990 );
+            for ( i = RRight; i <= RLeft; i++ )
+            {
+                sprintf( Buffer, "%s[%d]", pToken, i );
+                iToken = Abc_NamStrFindOrAdd( pNames, Buffer, NULL );
+                Vec_IntPush( vBuffer, iToken );
+            }
+            pToken = strtok( NULL, "  \n\r\t(),;=" );
+            continue;
+        }
+        Vec_IntPush( vBuffer, iToken );
         if ( iToken >= ACB_BUF && iToken < ACB_UNUSED )
         {
             for ( pStart = pToken; pStart < pLimit && *pStart != '\n'; pStart++ )
@@ -245,14 +326,11 @@ void * Acb_VerilogSimpleParse( Vec_Int_t * vBuffer, Abc_Nam_t * pNames )
             vCur = vOutputs;
         else if ( Token == ACB_WIRE )
             vCur = vWires;
-        else if ( Token >= ACB_BUF && Token <= ACB_XNOR )
+        else if ( Token >= ACB_BUF && Token < ACB_UNUSED )
         {
-            //char * pToken = Abc_NamStr(pNames, Vec_IntEntry(vBuffer, i+1));
             Vec_IntPush( vTypes, Token );
             Vec_IntPush( vTypes, Vec_IntSize(vFanins) );
             vCur = vFanins;
-            //if ( pToken[1] == 'z' && pToken[2] == '_' && pToken[3] == 'g' && pToken[4] == '_' )
-            //    i++;
         }
         else 
             Vec_IntPush( vCur, Token );
@@ -288,6 +366,8 @@ void * Acb_VerilogSimpleParse( Vec_Int_t * vBuffer, Abc_Nam_t * pNames )
         Ndr_AddObject( pDesign, ModuleID, ABC_OPER_CONST_F, 0, 0, 0, 0,   0, NULL,  1, &Token,   NULL  ); // no fanins
     if ( (Token = Abc_NamStrFind(pNames, "1\'b1")) )
         Ndr_AddObject( pDesign, ModuleID, ABC_OPER_CONST_T, 0, 0, 0, 0,   0, NULL,  1, &Token,   NULL  ); // no fanins
+    if ( (Token = Abc_NamStrFind(pNames, "1\'bx")) )
+        Ndr_AddObject( pDesign, ModuleID, ABC_OPER_CONST_X, 0, 0, 0, 0,   0, NULL,  1, &Token,   NULL  ); // no fanins
     Vec_IntForEachEntryDouble( vTypes, Token, Size, i ) 
         if ( Token > 0 )
         {
@@ -305,6 +385,182 @@ void * Acb_VerilogSimpleParse( Vec_Int_t * vBuffer, Abc_Nam_t * pNames )
     Vec_IntFree( vTypes );
     Vec_IntFree( vFanins );
     return pDesign;
+}
+
+/**Function*************************************************************
+
+  Synopsis    []
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Gia_FileSimpleParse_rec( Gia_Man_t * pNew, int Token, Vec_Int_t * vMapType, Vec_Int_t * vTypes, Vec_Int_t * vFanins, Vec_Int_t * vMap )
+{
+    int nFanins, * pFanins, pLits[16];
+    int i, Type, Size, Place = Vec_IntEntry( vMapType, Token ); 
+    int iLit = Vec_IntEntry( vMap, Token );
+    if ( iLit >= 0 )
+        return iLit;
+    Place = Vec_IntEntry( vMapType, Token );
+    assert( Place >= 0 );
+    Type = Vec_IntEntry( vTypes, Place );
+    Size = Vec_IntEntry( vTypes, Place+1 );
+    nFanins = Vec_IntEntry(vTypes, Place+3) - Size - 1;
+    pFanins = Vec_IntEntryP(vFanins, Size+1);
+    assert( nFanins > 0 && nFanins < 16 );
+    for ( i = 0; i < nFanins; i++ )
+        Gia_FileSimpleParse_rec( pNew, pFanins[i], vMapType, vTypes, vFanins, vMap );
+    for ( i = 0; i < nFanins; i++ )
+        pLits[i] = Vec_IntEntry( vMap, pFanins[i] );
+    if ( nFanins == 1 )
+    {
+        assert( Type == ACB_BUF || Type == ACB_NOT );
+        iLit = Abc_LitNotCond( pLits[0], Type == ACB_NOT );
+        iLit = Gia_ManAppendAnd2( pNew, iLit, iLit );
+    }
+    else
+    {
+        iLit = pLits[0];
+        if ( Type == ACB_AND || Type == ACB_NAND )
+            for ( i = 1; i < nFanins; i++ )
+                iLit = Gia_ManAppendAnd2( pNew, iLit, pLits[i] );
+        else if ( Type == ACB_OR || Type == ACB_NOR )
+            for ( i = 1; i < nFanins; i++ )
+                iLit = Gia_ManAppendOr2( pNew, iLit, pLits[i] );
+        else if ( Type == ACB_XOR || Type == ACB_XNOR )
+            for ( i = 1; i < nFanins; i++ )
+                iLit = Gia_ManAppendXor2( pNew, iLit, pLits[i] );
+        else assert( 0 );
+        iLit = Abc_LitNotCond( iLit, (Type == ACB_NAND || Type == ACB_NOR || Type == ACB_XNOR) );
+    }
+    Vec_IntWriteEntry( vMap, Token, iLit );
+    return iLit;
+}
+Gia_Man_t * Gia_FileSimpleParse( Vec_Int_t * vBuffer, Abc_Nam_t * pNames, int fNames, char * pFileW )
+{
+    Gia_Man_t * pNew     = NULL;
+    Vec_Int_t * vInputs  = Vec_IntAlloc(100);
+    Vec_Int_t * vOutputs = Vec_IntAlloc(100);
+    Vec_Int_t * vWires   = Vec_IntAlloc(100);
+    Vec_Int_t * vTypes   = Vec_IntAlloc(100);
+    Vec_Int_t * vFanins  = Vec_IntAlloc(100);
+    Vec_Int_t * vCur     = NULL;  
+    Vec_Int_t * vMap     = Vec_IntStartFull( Abc_NamObjNumMax(pNames) );
+    Vec_Int_t * vMapType = Vec_IntStartFull( Abc_NamObjNumMax(pNames) );
+    int i, iLit, Token, Size;
+    char Buffer[1000];
+    assert( Vec_IntEntry(vBuffer, 0) == ACB_MODULE );
+    Vec_IntForEachEntryStart( vBuffer, Token, i, 2 )
+    {
+        if ( vCur == NULL && Token >= ACB_UNUSED )
+            continue;
+        if ( Token == ACB_ENDMODULE )
+            break;
+        if ( Token == ACB_INPUT )
+            vCur = vInputs;
+        else if ( Token == ACB_OUTPUT )
+            vCur = vOutputs;
+        else if ( Token == ACB_WIRE )
+            vCur = vWires;
+        else if ( Token >= ACB_BUF && Token < ACB_UNUSED )
+        {
+            Vec_IntPush( vTypes, Token );
+            Vec_IntPush( vTypes, Vec_IntSize(vFanins) );
+            vCur = vFanins;
+        }
+        else if ( pFileW && vCur == vWires && Abc_NamStr(pNames, Token)[0] == 't' )
+            Vec_IntPush( vInputs, Token );
+        else 
+            Vec_IntPush( vCur, Token );
+    }
+    Vec_IntPush( vTypes, -1 );
+    Vec_IntPush( vTypes, Vec_IntSize(vFanins) );
+    // map types
+    Vec_IntForEachEntryDouble( vTypes, Token, Size, i ) 
+        if ( Token > 0 )
+            Vec_IntWriteEntry( vMapType, Vec_IntEntry(vFanins, Size), i );
+    // create design
+    pNew = Gia_ManStart( 10000 );
+    pNew->pName = Abc_UtilStrsav( Abc_NamStr(pNames, Vec_IntEntry(vBuffer, 1)) );
+    pNew->fGiaSimple = 1;
+    if ( (Token = Abc_NamStrFind(pNames, "1\'b0")) )
+        Vec_IntWriteEntry( vMap, Token, 0 );
+    if ( (Token = Abc_NamStrFind(pNames, "1\'b1")) )
+        Vec_IntWriteEntry( vMap, Token, 1 );
+    if ( (Token = Abc_NamStrFind(pNames, "1\'bx")) )
+        Vec_IntWriteEntry( vMap, Token, 0 );
+    if ( (Token = Abc_NamStrFind(pNames, "1\'bz")) )
+        Vec_IntWriteEntry( vMap, Token, 0 );
+    Vec_IntForEachEntry( vInputs, Token, i )
+        Gia_ManAppendCi(pNew);
+    Vec_IntForEachEntry( vInputs, Token, i )
+        Vec_IntWriteEntry( vMap, Token, Gia_ManAppendAnd2(pNew, Gia_ManCiLit(pNew, i), Gia_ManCiLit(pNew, i)) );
+    Vec_IntForEachEntry( vOutputs, Token, i )
+        Gia_FileSimpleParse_rec( pNew, Token, vMapType, vTypes, vFanins, vMap );
+    Vec_IntForEachEntry( vOutputs, Token, i )
+        Gia_ManAppendCo( pNew, Vec_IntEntry(vMap, Token) );
+    // create names
+    if ( fNames ) 
+    {
+        pNew->vPolars = Vec_BitStart( Gia_ManObjNum(pNew) );
+        pNew->vNamesNode = Vec_PtrStart( Gia_ManObjNum(pNew) );
+        Vec_IntForEachEntry( vMap, iLit, Token )
+        {
+            if ( iLit == -1 || !Gia_ObjIsAnd(Gia_ManObj(pNew, Abc_Lit2Var(iLit))) )
+                continue;
+            sprintf( Buffer, "%c_%s", Abc_LitIsCompl(iLit) ? 'c' : 'd', Abc_NamStr(pNames, Token) );
+            assert( Vec_PtrEntry(pNew->vNamesNode, Abc_Lit2Var(iLit)) == NULL );
+            Vec_PtrWriteEntry( pNew->vNamesNode, Abc_Lit2Var(iLit), Abc_UtilStrsav(Buffer) );
+            Vec_BitWriteEntry( pNew->vPolars, Abc_Lit2Var(iLit), Abc_LitIsCompl(iLit) );
+        }
+    }
+    else
+    {
+        Gia_Man_t * pTemp;
+        pNew = Gia_ManDupDfsRehash( pTemp = pNew );
+        Gia_ManStop( pTemp );
+    }
+    pNew->vNamesIn  = Vec_PtrAlloc( Vec_IntSize(vInputs) );
+    Vec_IntForEachEntry( vInputs, Token, i )
+        Vec_PtrPush( pNew->vNamesIn, Abc_UtilStrsav(Abc_NamStr(pNames, Token)) );
+    pNew->vNamesOut = Vec_PtrAlloc( Vec_IntSize(vOutputs) );
+    Vec_IntForEachEntry( vOutputs, Token, i )
+        Vec_PtrPush( pNew->vNamesOut, Abc_UtilStrsav(Abc_NamStr(pNames, Token)) );
+    if ( pFileW && fNames )
+    {
+        extern Vec_Int_t * Acb_ReadWeightMap( char * pFileName, Abc_Nam_t * pNames );
+        Vec_Int_t * vT2W = Acb_ReadWeightMap( pFileW, pNames );
+        assert( pNew->vWeights == NULL );
+        pNew->vWeights = Vec_IntStartFull( Gia_ManObjNum(pNew) );
+        Vec_IntForEachEntry( vMap, iLit, Token )
+            if ( iLit != -1 && Vec_IntEntry(vT2W, Token) != -1 )
+                Vec_IntWriteEntry( pNew->vWeights, Abc_Lit2Var(iLit), Vec_IntEntry(vT2W, Token) );
+        Vec_IntFree( vT2W );
+    }
+    // cleanup
+    Vec_IntFree( vInputs );
+    Vec_IntFree( vOutputs );
+    Vec_IntFree( vWires );
+    Vec_IntFree( vTypes );
+    Vec_IntFree( vFanins );
+    Vec_IntFree( vMap );
+    Vec_IntFree( vMapType );
+    return pNew;
+}
+Gia_Man_t * Gia_FileSimpleRead( char * pFileName, int fNames, char * pFileW )
+{
+    Abc_Nam_t * pNames = Acb_VerilogStartNames();
+    Vec_Int_t * vBuffer = Acb_VerilogSimpleLex( pFileName, pNames );
+    Gia_Man_t * pNew = vBuffer ? Gia_FileSimpleParse( vBuffer, pNames, fNames, pFileW ) : NULL;
+    assert( pNew->pSpec == NULL );
+    pNew->pSpec = Abc_UtilStrsav( pFileName );
+    Abc_NamDeref( pNames );
+    Vec_IntFree( vBuffer );
+    return pNew;
 }
 
 /**Function*************************************************************
@@ -355,10 +611,18 @@ Vec_Int_t * Acb_ReadWeightMap( char * pFileName, Abc_Nam_t * pNames )
   SeeAlso     []
 
 ***********************************************************************/
+char ** Acb_PrepareNames( Abc_Nam_t * p )
+{
+    char ** ppRes = ABC_CALLOC( char *, Abc_NamObjNumMax(p) );
+    int i;
+    for ( i = 0; i < Abc_NamObjNumMax(p); i++ )
+        ppRes[i] = Abc_NamStr( p, i );
+    return ppRes;
+}
 Acb_Ntk_t * Acb_VerilogSimpleRead( char * pFileName, char * pFileNameW )
 {
     extern Acb_Ntk_t * Acb_NtkFromNdr( char * pFileName, void * pModule, Abc_Nam_t * pNames, Vec_Int_t * vWeights, int nNameIdMax );
-    Acb_Ntk_t * pNtk;
+    Acb_Ntk_t * pNtk; 
     Abc_Nam_t * pNames = Acb_VerilogStartNames();
     Vec_Int_t * vBuffer = Acb_VerilogSimpleLex( pFileName, pNames );
     void * pModule = vBuffer ? Acb_VerilogSimpleParse( vBuffer, pNames ) : NULL;
@@ -373,13 +637,23 @@ Acb_Ntk_t * Acb_VerilogSimpleRead( char * pFileName, char * pFileNameW )
         printf( "Cannot read weight file \"%s\".\n", pFileNameW );
         return NULL;
     }
-//    Ndr_ModuleWriteVerilog( "iccad17/unit1/test.v", pModule, pNameStrs );
+    if ( 0 )
+    {
+        char ** ppNames = Acb_PrepareNames(pNames);
+        Ndr_WriteVerilog( Extra_FileNameGenericAppend(pFileName, "_ndr.v"), pModule, ppNames, 1 );
+        ABC_FREE( ppNames );
+    }
     pNtk = Acb_NtkFromNdr( pFileName, pModule, pNames, vWeights, Abc_NamObjNumMax(pNames) );
     Ndr_Delete( pModule );
     Vec_IntFree( vBuffer );
     Vec_IntFreeP( &vWeights );
     Abc_NamDeref( pNames );
     return pNtk;
+}
+void Acb_VerilogSimpleReadTest( char * pFileName )
+{
+    Acb_Ntk_t * p = Acb_VerilogSimpleRead( pFileName, NULL );
+    Acb_NtkFree( p );
 }
 
 /**Function*************************************************************
@@ -440,7 +714,10 @@ void Acb_VerilogSimpleWrite( Acb_Ntk_t * p, char * pFileName )
         {
             assert( Acb_ObjType(p, iObj) == ABC_OPER_CONST_F || Acb_ObjType(p, iObj) == ABC_OPER_CONST_T );
             fprintf( pFile, "  %s (", Acb_Oper2Name( ABC_OPER_BIT_BUF ) );
-            fprintf( pFile, " 1\'b%d", Acb_ObjType(p, iObj) == ABC_OPER_CONST_T );
+            if ( Acb_ObjType(p, iObj) == ABC_OPER_CONST_X )
+                fprintf( pFile, " 1\'bx" );
+            else
+                fprintf( pFile, " 1\'b%d", Acb_ObjType(p, iObj) == ABC_OPER_CONST_T );
             fprintf( pFile, " );\n" );
         }
 
@@ -579,12 +856,18 @@ Vec_Int_t * Acb_NtkFindDivsCis( Acb_Ntk_t * p, Vec_Int_t * vSupp )
     printf( "Divisors are %d support variables (CIs in the TFO of the targets).\n", Vec_IntSize(vSupp) );
     return vDivs;
 }
-Vec_Int_t * Acb_NtkFindDivs( Acb_Ntk_t * p, Vec_Int_t * vSupp, Vec_Bit_t * vBlock, int fVerbose )
+Vec_Int_t * Acb_NtkFindDivs( Acb_Ntk_t * p, Vec_Int_t * vSupp, Vec_Bit_t * vBlock, int fUnitW, int fVerbose )
 {
     int fPrintWeights = 0;
     int nDivLimit = 5000;
     int i, iObj;
     Vec_Int_t * vDivs = Vec_IntAlloc( 1000 );
+    if ( fUnitW )
+    {
+        Acb_NtkForEachNode( p, iObj )
+            if ( Acb_ObjWeight(p, iObj) > 0 )
+                Vec_IntWriteEntry( &p->vObjWeight, iObj, 1 );
+    }
     // mark inputs
     Acb_NtkIncTravId( p );
     Acb_NtkForEachCiVec( vSupp, p, iObj, i )
@@ -754,6 +1037,31 @@ Gia_Man_t * Acb_NtkToGia( Acb_Ntk_t * p, Vec_Int_t * vSupp, Vec_Int_t * vNodes, 
     Gia_ManStop( pOne );
     return pNew;
 }
+int Acb_NtkSaveNames( Acb_Ntk_t * p, Vec_Int_t * vSupp, Vec_Int_t * vNodes, Vec_Int_t * vRoots, Vec_Int_t * vDivs, Vec_Int_t * vTargets, Gia_Man_t * pNew )
+{
+    int i, iObj;
+    assert( pNew->vNamesIn == NULL );
+
+    pNew->vNamesIn = Vec_PtrAlloc( Gia_ManCiNum(pNew) );
+    Acb_NtkForEachCiVec( vSupp, p, iObj, i )
+        Vec_PtrPush( pNew->vNamesIn, Abc_UtilStrsav(Acb_ObjNameStr(p, iObj)) );
+    if ( vTargets )
+        Vec_IntForEachEntry( vTargets, iObj, i )
+            Vec_PtrPush( pNew->vNamesIn, Abc_UtilStrsav(Acb_ObjNameStr(p, iObj)) );
+
+    pNew->vNamesOut = Vec_PtrAlloc( Gia_ManCoNum(pNew) );
+    Acb_NtkForEachCoDriverVec( vRoots, p, iObj, i )
+        Vec_PtrPush( pNew->vNamesOut, Abc_UtilStrsav(Acb_ObjNameStr(p, iObj)) );
+    if ( vDivs )
+        Vec_IntForEachEntry( vDivs, iObj, i )
+        {
+            char Buffer[100];
+            assert( strlen(Acb_ObjNameStr(p, iObj)) < 90 );
+            sprintf( Buffer, "%s_%d", Acb_ObjNameStr(p, iObj), Acb_ObjWeight(p, iObj) );
+            Vec_PtrPush( pNew->vNamesOut, Abc_UtilStrsav(Buffer) );
+        }
+    return 1;
+}
 
 /**Function*************************************************************
 
@@ -822,6 +1130,21 @@ void Vec_IntPermute( Vec_Int_t * p )
     {
         int j = rand()%nSize;
         ABC_SWAP( int, pArray[i], pArray[j] );
+    }
+}
+
+void Vec_IntPermute2( Vec_Int_t * p )
+{
+    int i, nSize = Vec_IntSize( p );
+    int * pArray = Vec_IntArray( p );
+    srand( time(NULL) );
+    for ( i = 0; i < nSize-1; i++ )
+    {
+        if ( rand() % 3 == 0 )
+        {
+            printf( "Permuting %d and %d\n", i, i+1 );
+            ABC_SWAP( int, pArray[i], pArray[i+1] );
+        }
     }
 }
 
@@ -1541,7 +1864,7 @@ char * Acb_EnumerateSatAssigns( sat_solver * pSat, int PivotVar, int FreeVar, Ve
     {
         if ( iMint == 1000 )
         {
-            //if ( Vec_IntSize(vDivVars) == 0 )
+            if ( Vec_IntSize(vDivVars) == 0 )
             {
                 printf( "Assuming constant 0 function.\n" );
                 Vec_StrClear( vTempSop );
@@ -1897,34 +2220,66 @@ Vec_Ptr_t * Acb_GenerateSignalNames( Acb_Ntk_t * p, Vec_Int_t * vDivs, Vec_Int_t
     Vec_StrFree( vStr );
     return vRes;
 }
+Vec_Int_t * Acb_GetUsedDivs( Vec_Int_t * vDivs, Vec_Int_t * vUsed )
+{
+    int i, iObj;
+    Vec_Int_t * vRes = Vec_IntAlloc( Vec_IntSize(vUsed) );
+    Vec_IntForEachEntryInVec( vDivs, vUsed, iObj, i )
+        Vec_IntPush( vRes, iObj );
+    return vRes;
+}
+Vec_Ptr_t * Acb_SignalNames( Acb_Ntk_t * p, Vec_Int_t * vObjs )
+{
+    Vec_Ptr_t * vNames = Vec_PtrAlloc( Vec_IntSize(vObjs) );
+    int i, iObj;
+    Vec_IntForEachEntry( vObjs, iObj, i )
+        Vec_PtrPush( vNames, Acb_ObjNameStr(p, iObj) );
+    return vNames;
+}
 Vec_Str_t * Acb_GeneratePatch( Acb_Ntk_t * p, Vec_Int_t * vDivs, Vec_Int_t * vUsed, Vec_Ptr_t * vSops, Vec_Ptr_t * vGias, Vec_Int_t * vTars )
 {
+    extern int Acb_NtkCollectMfsGates( char * pFileName, Vec_Ptr_t * vNamesRefed, Vec_Ptr_t * vNamesDerefed, int nGates1[5] );
     extern Vec_Wec_t * Abc_SopSynthesize( Vec_Ptr_t * vSops );
     extern Vec_Wec_t * Abc_GiaSynthesize( Vec_Ptr_t * vGias, Gia_Man_t * pMulti );
     Vec_Wec_t * vGates = vGias ? Abc_GiaSynthesize(vGias, NULL) : Abc_SopSynthesize(vSops);  Vec_Int_t * vGate;
     int nOuts = vGias ? Vec_PtrSize(vGias) : Vec_PtrSize(vSops);
     int i, k, iObj, nWires = Vec_WecSize(vGates) - Vec_IntSize(vUsed) - nOuts, fFirst = 1;
+    int nGates1[5] = {0}, nGates0[5] = {0};
     Vec_Ptr_t * vNames = Acb_GenerateSignalNames( p, vDivs, vUsed, nWires, vTars, vGates );
     Vec_Str_t * vStr = Vec_StrAlloc( 100 );
-
-    int nInvs = 0, nBufs = 0, nNodes = 0, nConst = 0;
+    Vec_Int_t * vSup = Acb_GetUsedDivs( vDivs, vUsed );
+    Vec_Ptr_t * vSpN = Acb_SignalNames( p, vSup );
+    Vec_Int_t * vTfi = Acb_ObjCollectTfiVec( p, vSup );
+    Vec_Int_t * vTfo = Acb_ObjCollectTfoVec( p, vTars );
+    int nPiCount = Acb_NtkCountPiBuffers( p, vSup );
+    int nPoCount = Acb_NtkCountPoDrivers( p, vTars );
+    int nMffc    = Abc_FrameReadSpecName() ? Acb_NtkCollectMfsGates( Abc_FrameReadSpecName(), vSpN, Abc_FrameReadSignalNames(), nGates1 ) : 0;
+    Vec_PtrFree( vSpN );
+    Vec_IntFree( vSup );
     Vec_WecForEachLevelStartStop( vGates, vGate, i, Vec_IntSize(vUsed), Vec_IntSize(vUsed)+nWires )
     {
         if ( Vec_IntSize(vGate) > 2 )
         {
             char * pName = Acb_Oper2Name(Vec_IntEntry(vGate, 0));
             if ( !strcmp(pName, "buf") )
-                nBufs++;
+                nGates0[2]++;
             else if ( !strcmp(pName, "not") )
-                nInvs++;
+                nGates0[3]++;
             else
-                nNodes++;
+                nGates0[4] += Vec_IntSize(vGate) - 3;
         }
         else
-            nConst++;
+            nGates0[Vec_IntEntry(vGate, 0) == ABC_OPER_CONST_T]++;
     }
-    Vec_StrPrintF( vStr, "// Patch statistics: in = %d  out = %d  gate = %d  (const = %d  buf = %d  inv = %d  other = %d)\n\n", 
-        Vec_IntSize(vUsed), nOuts, nWires, nConst, nBufs, nInvs, nNodes );
+
+    Vec_StrPrintF( vStr, "// Patch   : in = %d  out = %d : pi_in = %d  po_out = %d : tfi = %d  tfo = %d\n", Vec_IntSize(vUsed), nOuts, nPiCount, nPoCount, Vec_IntSize(vTfi), Vec_IntSize(vTfo) );
+    Vec_StrPrintF( vStr, "// Added   : gate =%4d : c0 =%2d  c1 =%2d  buf =%3d  inv =%3d  two-input =%4d\n", nWires,         nGates0[0], nGates0[1], nGates0[2], nGates0[3], nGates0[4] ); 
+    if ( Abc_FrameReadSpecName() )
+    Vec_StrPrintF( vStr, "// Removed : gate =%4d : c0 =%2d  c1 =%2d  buf =%3d  inv =%3d  two-input =%4d\n", nMffc,          nGates1[0], nGates1[1], nGates1[2], nGates1[3], nGates1[4] ); 
+    if ( Abc_FrameReadSpecName() )
+    Vec_StrPrintF( vStr, "// TOTAL   : gate =%4d : c0 =%2d  c1 =%2d  buf =%3d  inv =%3d  two-input =%4d\n", nWires-nMffc, nGates0[0]-nGates1[0],  nGates0[1]-nGates1[1],  nGates0[2]-nGates1[2], nGates0[3]-nGates1[3], nGates0[4]-nGates1[4] ); 
+    Vec_StrPrintF( vStr, "\n" );
+
     Vec_StrAppend( vStr, "module patch (" );
 
     assert( Vec_IntSize(vTars) == nOuts );
@@ -1980,8 +2335,17 @@ Vec_Str_t * Acb_GeneratePatch( Acb_Ntk_t * p, Vec_Int_t * vDivs, Vec_Int_t * vUs
     Vec_PtrFreeFree( vNames );
     Vec_WecFree( vGates );
 
-    printf( "Synthesized patch with %d inputs, %d outputs and %d gates (const = %d  buf = %d  inv = %d  other = %d).\n", 
-        Vec_IntSize(vUsed), nOuts, nWires, nConst, nBufs, nInvs, nNodes );
+//    printf( "Synthesized patch with %d inputs, %d outputs and %d gates (const = %d  buf = %d  inv = %d  other = %d).\n", 
+//        Vec_IntSize(vUsed), nOuts, nWires, nConst, nBufs, nInvs, nNodes );
+//    printf( "Summary of the results\n" );
+    printf( "\n" );
+    printf( "Patch   : in = %d  out = %d : pi_in = %d  po_out = %d : tfi = %d  tfo = %d\n", Vec_IntSize(vUsed), nOuts, nPiCount, nPoCount, Vec_IntSize(vTfi), Vec_IntSize(vTfo) );
+    printf( "Added   : gate =%4d : c0 =%2d  c1 =%2d  buf =%3d  inv =%3d  two-input =%4d\n", nWires,         nGates0[0], nGates0[1], nGates0[2], nGates0[3], nGates0[4] ); 
+    if ( Abc_FrameReadSpecName() )
+    printf( "Removed : gate =%4d : c0 =%2d  c1 =%2d  buf =%3d  inv =%3d  two-input =%4d\n", nMffc,          nGates1[0], nGates1[1], nGates1[2], nGates1[3], nGates1[4] ); 
+    if ( Abc_FrameReadSpecName() )
+    printf( "TOTAL   : gate =%4d : c0 =%2d  c1 =%2d  buf =%3d  inv =%3d  two-input =%4d\n", nWires-nMffc,   nGates0[0]-nGates1[0],  nGates0[1]-nGates1[1],  nGates0[2]-nGates1[2], nGates0[3]-nGates1[3], nGates0[4]-nGates1[4] ); 
+    printf( "\n" );
     return vStr;
 }
 
@@ -2040,7 +2404,7 @@ Vec_Str_t * Acb_GeneratePatch2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * 
     extern Vec_Wec_t * Abc_GiaSynthesize( Vec_Ptr_t * vGias, Gia_Man_t * pMulti );
     Vec_Wec_t * vGates = Abc_GiaSynthesize( NULL, pGia );  Vec_Int_t * vGate;
     int nIns = Vec_PtrSize(vIns), nOuts = Vec_PtrSize(vOuts); char * pName;
-    int i, k, iObj, nWires = Vec_WecSize(vGates) - nIns - nOuts, fFirst = 1;
+    int i, k, iObj, nWires = Vec_WecSize(vGates) - nIns - nOuts, nTwoIns = 0, fFirst = 1;
     Vec_Ptr_t * vNames = Acb_GenerateSignalNames2( vGates, vIns, vOuts );
 
     Vec_Str_t * vStr = Vec_StrAlloc( 100 );
@@ -2049,7 +2413,7 @@ Vec_Str_t * Acb_GeneratePatch2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * 
     Vec_PtrForEachEntry( char *, vOuts, pName, i )
         Vec_StrPrintF( vStr, "%s %s", i ? ",":"", pName );
     Vec_PtrForEachEntry( char *, vIns, pName, i )
-        Vec_StrPrintF( vStr, ", %s", pName );
+        Vec_StrPrintF( vStr, ", %s%s", i ? "":"  ", pName );
     Vec_StrAppend( vStr, " );\n\n" );
 
     Vec_StrAppend( vStr, "  output" );
@@ -2071,8 +2435,9 @@ Vec_Str_t * Acb_GeneratePatch2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * 
             if ( !strncmp(pName, "ww", 2) )
                 Vec_StrPrintF( vStr, "%s %s", fFirst ? "":",", pName ), fFirst = 0;
         }
-        Vec_StrAppend( vStr, ";\n\n" );
+        Vec_StrAppend( vStr, ";\n" );
     }
+    Vec_StrAppend( vStr, "\n" );
 
     // create internal nodes
     Vec_WecForEachLevelStartStop( vGates, vGate, i, nIns, nIns+nWires )
@@ -2083,6 +2448,7 @@ Vec_Str_t * Acb_GeneratePatch2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * 
             Vec_IntForEachEntryStart( vGate, iObj, k, 1 )
                 Vec_StrPrintF( vStr, "%s %s", k > 1 ? ",":"", (char *)Vec_PtrEntry(vNames, iObj) );
             Vec_StrAppend( vStr, " );\n" );
+            nTwoIns += Vec_IntSize(vGate) - 3;
         }
         else
         {
@@ -2098,14 +2464,14 @@ Vec_Str_t * Acb_GeneratePatch2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * 
     Vec_PtrFreeFree( vNames );
     Vec_WecFree( vGates );
 
-    printf( "Synthesized patch with %d inputs, %d outputs and %d gates.\n", nIns, nOuts, nWires );
+    printf( "Synthesized patch with %d inputs, %d outputs and %d gates (including %d two-input gates).\n", nIns, nOuts, nWires, nTwoIns );
     return vStr;
 }
-void Acb_GenerateFile2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * vOuts, char * pFileName, char * pFileNameOut )
+void Acb_GenerateFile2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * vOuts, char * pFileName, char * pFileNameOut, int fSkipMffc )
 {
     extern void Acb_GenerateFilePatch( Vec_Str_t * p, char * pFileNamePatch );
     extern void Acb_GenerateFileOut( Vec_Str_t * vPatchLine, char * pFileNameF, char * pFileNameOut, Vec_Str_t * vPatch );
-    extern void Acb_NtkInsert( char * pFileNameIn, char * pFileNameOut, Vec_Ptr_t * vNames, int fNumber );
+    extern void Acb_NtkInsert( char * pFileNameIn, char * pFileNameOut, Vec_Ptr_t * vNames, int fNumber, int fSkipMffc );
     Vec_Str_t * vInst   = Acb_GenerateInstance2( vIns, vOuts );
     Vec_Str_t * vPatch  = Acb_GeneratePatch2( pGia, vIns, vOuts );
     //printf( "%s", Vec_StrArray(vPatch) );
@@ -2113,7 +2479,7 @@ void Acb_GenerateFile2( Gia_Man_t * pGia, Vec_Ptr_t * vIns, Vec_Ptr_t * vOuts, c
     // generate output files
     Acb_GenerateFilePatch( vPatch, "patch.v" );
     printf( "Finished dumping patch file \"%s\".\n", "patch.v" );
-    Acb_NtkInsert( pFileName, "temp.v", vOuts, 0 );
+    Acb_NtkInsert( pFileName, "temp.v", vOuts, 0, fSkipMffc );
     printf( "Finished dumping intermediate file \"%s\".\n", "temp.v" );
     Acb_GenerateFileOut( vInst, "temp.v", pFileNameOut, vPatch );
     printf( "Finished dumping the resulting file \"%s\".\n", pFileNameOut );
@@ -2479,7 +2845,7 @@ Vec_Ptr_t * Acb_TransformPatchFunctions( Vec_Ptr_t * vSops, Vec_Wec_t * vSupps, 
             Vec_IntWriteEntry( vMap, iVar, Vec_IntSize(vUsed) );
             Vec_IntPush( vUsed, iVar );
         }
-    printf( "The number of used variables %d (out of %d).\n", Vec_IntSum(vPres), Vec_IntSize(vPres) );
+    //printf( "The number of used variables %d (out of %d).\n", Vec_IntSum(vPres), Vec_IntSize(vPres) );
     // remap SOPs
     Vec_WecForEachLevel( vSupps, vLevel, i )
     {
@@ -2505,13 +2871,14 @@ Vec_Ptr_t * Acb_TransformPatchFunctions( Vec_Ptr_t * vSops, Vec_Wec_t * vSupps, 
   SeeAlso     []
 
 ***********************************************************************/
-int Acb_NtkEcoPerform( Acb_Ntk_t * pNtkF, Acb_Ntk_t * pNtkG, char * pFileName[4], int fCisOnly, int fCheck, int fVerbose, int fVeryVerbose )
+int Acb_NtkEcoPerform( Acb_Ntk_t * pNtkF, Acb_Ntk_t * pNtkG, char * pFileName[4], int nTimeout, int fCisOnly, int fInputs, int fCheck, int fUnitW, int fVerbose, int fVeryVerbose )
 {
     extern Gia_Man_t * Abc_SopSynthesizeOne( char * pSop, int fClp );
 
+    abctime clkStart  = Abc_Clock();
     abctime clk  = Abc_Clock();
     int nTargets = Vec_IntSize(&pNtkF->vTargets);
-    int TimeOut  = fCisOnly ? 0 : 60;  // 60 seconds
+    int TimeOut  = fCisOnly ? 0 : 120;  // 60 seconds
     int RetValue = 1;
 
     // compute various sets of nodes
@@ -2520,7 +2887,7 @@ int Acb_NtkEcoPerform( Acb_Ntk_t * pNtkF, Acb_Ntk_t * pNtkG, char * pFileName[4]
     Vec_Int_t * vSuppF  = Acb_NtkFindSupp( pNtkF, vRoots );
     Vec_Int_t * vSuppG  = Acb_NtkFindSupp( pNtkG, vRoots );
     Vec_Int_t * vSupp   = Vec_IntTwoMerge( vSuppF, vSuppG );
-    Vec_Int_t * vDivs   = fCisOnly ? Acb_NtkFindDivsCis( pNtkF, vSupp ) : Acb_NtkFindDivs( pNtkF, vSupp, vBlock, fVerbose );
+    Vec_Int_t * vDivs   = (fCisOnly || fInputs) ? Acb_NtkFindDivsCis( pNtkF, vSupp ) : Acb_NtkFindDivs( pNtkF, vSupp, vBlock, fUnitW, fVerbose );
     Vec_Int_t * vNodesF = Acb_NtkFindNodes( pNtkF, vRoots, vDivs );
     Vec_Int_t * vNodesG = Acb_NtkFindNodes( pNtkG, vRoots, NULL );
 
@@ -2542,6 +2909,10 @@ int Acb_NtkEcoPerform( Acb_Ntk_t * pNtkF, Acb_Ntk_t * pNtkG, char * pFileName[4]
 
     char * pSop = NULL;
     int i;
+
+//    int Value = Acb_NtkSaveNames( pNtkF, vSupp, vNodesF, vRoots, vDivs, &pNtkF->vTargets, pGiaF ); 
+//    Gia_AigerWrite( pGiaF, pFileBase, 0, 0, 0 );
+//    return 0;
 
     if ( fVerbose )
     {
@@ -2622,6 +2993,14 @@ int Acb_NtkEcoPerform( Acb_Ntk_t * pNtkF, Acb_Ntk_t * pNtkG, char * pFileName[4]
                 RetValue = 0;
                 goto cleanup;
             }
+            if ( nTimeout && (Abc_Clock() - clkStart)/CLOCKS_PER_SEC >= nTimeout ) 
+            {
+                Vec_IntFreeP( &vSupp );
+                ABC_FREE( pSop );
+                printf( "The target computation timed out after %d seconds.\n", nTimeout );
+                RetValue = 0;
+                goto cleanup;
+            }
 
             // add new function to the miter
             pOne  = Abc_SopSynthesizeOne( pSop, 1 );
@@ -2683,6 +3062,16 @@ int Acb_NtkEcoPerform( Acb_Ntk_t * pNtkF, Acb_Ntk_t * pNtkG, char * pFileName[4]
     if ( pFileName[3] == NULL ) Acb_GenerateFilePatch( vPatch, "patch.v" );
     Acb_GenerateFileOut( vInst, pFileName[0], pFileName[3] ? pFileName[3] : (char *)"out.v", vPatch );
     printf( "Finished dumping resulting file \"%s\".\n\n", pFileName[3] ? pFileName[3] : "out.v" );
+/*
+    {
+        char * pFileBase = Extra_FileNameGenericAppend( pFileName[0], "_patch.v" );
+        Acb_GenerateFilePatch( vPatch, pFileBase );
+        pFileBase = Extra_FileNameGenericAppend( pFileName[0], "_out.v" );
+        Acb_GenerateFileOut( vInst, pFileName[0], pFileName[3] ? pFileName[3] : pFileBase, vPatch );
+        Acb_GenerateFileOut( vInst, pFileName[0], pFileName[3] ? pFileName[3] : "out.v", vPatch );
+        printf( "Finished dumping resulting file \"%s\".\n\n", pFileName[3] ? pFileName[3] : pFileBase );
+    }
+*/
     //Gia_AigerWrite( pGiaG, "test.aig", 0, 0, 0 );
 cleanup:
     // cleanup
@@ -2734,7 +3123,7 @@ void Acb_NtkTestRun2( char * pFileNames[3], int fVerbose )
     Acb_Ntk_t * pNtk = Acb_VerilogSimpleRead( pFileNames[0], pFileNames[2] );
     Acb_VerilogSimpleWrite( pNtk, pFileNameOut );
     Acb_ManFree( pNtk->pDesign );
-    Acb_IntallLibrary();
+    Acb_IntallLibrary( 0 );
 }
 
 /**Function*************************************************************
@@ -2748,7 +3137,7 @@ void Acb_NtkTestRun2( char * pFileNames[3], int fVerbose )
   SeeAlso     []
 
 ***********************************************************************/
-void Acb_NtkRunEco( char * pFileNames[4], int fCheck, int fRandom, int fVerbose, int fVeryVerbose )
+void Acb_NtkRunEco( char * pFileNames[4], int nTimeout, int fCheck, int fRandom, int fInputs, int fUnitW, int fVerbose, int fVeryVerbose )
 {
     char Command[1000]; int Result = 1;
     Acb_Ntk_t * pNtkF = Acb_VerilogSimpleRead( pFileNames[0], pFileNames[2] );
@@ -2768,12 +3157,12 @@ void Acb_NtkRunEco( char * pFileNames[4], int fCheck, int fRandom, int fVerbose,
     assert( Acb_NtkCiNum(pNtkF) == Acb_NtkCiNum(pNtkG) );
     assert( Acb_NtkCoNum(pNtkF) == Acb_NtkCoNum(pNtkG) );
 
-    Acb_IntallLibrary();
+    Acb_IntallLibrary( Abc_FrameReadSignalNames() != NULL );
 
-    if ( !Acb_NtkEcoPerform( pNtkF, pNtkG, pFileNames, 0, fCheck, fVerbose, fVeryVerbose ) )
+    if ( !Acb_NtkEcoPerform( pNtkF, pNtkG, pFileNames, nTimeout, 0, fInputs, fCheck, fUnitW, fVerbose, fVeryVerbose ) )
     {
 //        printf( "General computation timed out. Trying inputs only.\n\n" );
-//        if ( !Acb_NtkEcoPerform( pNtkF, pNtkG, pFileNames, 1, fCheck, fVerbose, fVeryVerbose ) )
+//        if ( !Acb_NtkEcoPerform( pNtkF, pNtkG, pFileNames, nTimeout, 1, fInputs, fCheck, fUnitW, fVerbose, fVeryVerbose ) )
 //            printf( "Input-only computation also timed out.\n\n" );
         printf( "Computation did not succeed.\n" );
         Result = 0;

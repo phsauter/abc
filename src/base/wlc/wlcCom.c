@@ -1037,7 +1037,7 @@ int Abc_CommandBlast( Abc_Frame_t * pAbc, int argc, char ** argv )
     Wlc_BstParDefault( pPar );
     pPar->nOutputRange = 2;
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "ORAMcombqadestnizvh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "ORAMcombqaydestnizvh" ) ) != EOF )
     {
         switch ( c )
         {
@@ -1102,6 +1102,9 @@ int Abc_CommandBlast( Abc_Frame_t * pAbc, int argc, char ** argv )
             break;
         case 'a':
             pPar->fCla ^= 1;
+            break;
+        case 'y':
+            pPar->fDivBy0 ^= 1;
             break;
         case 'd':
             pPar->fCreateMiter ^= 1;
@@ -1198,7 +1201,7 @@ int Abc_CommandBlast( Abc_Frame_t * pAbc, int argc, char ** argv )
     Abc_FrameUpdateGia( pAbc, pNew );
     return 0;
 usage:
-    Abc_Print( -2, "usage: %%blast [-ORAM num] [-combqadestnizvh]\n" );
+    Abc_Print( -2, "usage: %%blast [-ORAM num] [-combqaydestnizvh]\n" );
     Abc_Print( -2, "\t         performs bit-blasting of the word-level design\n" );
     Abc_Print( -2, "\t-O num : zero-based index of the first word-level PO to bit-blast [default = %d]\n", pPar->iOutput );
     Abc_Print( -2, "\t-R num : the total number of word-level POs to bit-blast [default = %d]\n",          pPar->nOutputRange );
@@ -1210,6 +1213,7 @@ usage:
     Abc_Print( -2, "\t-b     : toggle generating radix-4 Booth multipliers [default = %s]\n",              pPar->fBooth? "yes": "no" );
     Abc_Print( -2, "\t-q     : toggle generating non-restoring square root [default = %s]\n",              pPar->fNonRest? "yes": "no" );
     Abc_Print( -2, "\t-a     : toggle generating carry-look-ahead adder [default = %s]\n",                 pPar->fCla? "yes": "no" );
+    Abc_Print( -2, "\t-y     : toggle creating different divide-by-0 condition [default = %s]\n",          pPar->fDivBy0? "yes": "no" );
     Abc_Print( -2, "\t-d     : toggle creating dual-output multi-output miter [default = %s]\n",           pPar->fCreateMiter? "yes": "no" );
     Abc_Print( -2, "\t-e     : toggle creating miter with output word bits combined [default = %s]\n",     pPar->fCreateWordMiter? "yes": "no" );
     Abc_Print( -2, "\t-s     : toggle creating decoded MUXes [default = %s]\n",                            pPar->fDecMuxes? "yes": "no" );
@@ -1327,16 +1331,20 @@ usage:
 ******************************************************************************/
 int Abc_CommandRetime( Abc_Frame_t * pAbc, int argc, char ** argv )
 {
-    extern void Wln_NtkRetimeTest( char * pFileName, int fSkipSimple, int fDump, int fVerbose );
+    extern void Wln_NtkRetimeTest( char * pFileName, int fIgnoreIO, int fSkipSimple, int fDump, int fVerbose );
     FILE * pFile;
     char * pFileName = NULL;
+    int fIgnoreIO = 0;
     int fSkipSimple  = 0;
     int c, fDump = 0, fVerbose  = 0;
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "sdvh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "isdvh" ) ) != EOF )
     {
         switch ( c )
         {
+        case 'i':
+            fIgnoreIO ^= 1;
+            break;
         case 's':
             fSkipSimple ^= 1;
             break;
@@ -1362,7 +1370,7 @@ int Abc_CommandRetime( Abc_Frame_t * pAbc, int argc, char ** argv )
             printf( "Transforming NDR into internal represnetation has failed.\n" );
             return 0;
         }
-        vMoves = Wln_NtkRetime( pNtk, fSkipSimple, fVerbose );
+        vMoves = Wln_NtkRetime( pNtk, fIgnoreIO, fSkipSimple, fVerbose );
         Wln_NtkFree( pNtk );
         ABC_FREE( pAbc->pNdrArray );
         if ( vMoves ) pAbc->pNdrArray = Vec_IntReleaseNewArray( vMoves );
@@ -1385,11 +1393,12 @@ int Abc_CommandRetime( Abc_Frame_t * pAbc, int argc, char ** argv )
         return 0;
     }
     fclose( pFile );
-    Wln_NtkRetimeTest( pFileName, fSkipSimple, fDump, fVerbose );
+    Wln_NtkRetimeTest( pFileName, fIgnoreIO, fSkipSimple, fDump, fVerbose );
     return 0;
 usage:
-    Abc_Print( -2, "usage: %%retime [-sdvh]\n" );
+    Abc_Print( -2, "usage: %%retime [-isdvh]\n" );
     Abc_Print( -2, "\t         performs retiming for the NDR design\n" );
+    Abc_Print( -2, "\t-i     : toggle ignoring delays of IO paths [default = %s]\n", fIgnoreIO? "yes": "no" );
     Abc_Print( -2, "\t-s     : toggle printing simple nodes [default = %s]\n", !fSkipSimple? "yes": "no" );
     Abc_Print( -2, "\t-d     : toggle dumping the network in Verilog [default = %s]\n", fDump? "yes": "no" );
     Abc_Print( -2, "\t-v     : toggle printing verbose information [default = %s]\n", fVerbose? "yes": "no" );
@@ -1718,15 +1727,19 @@ usage:
 ******************************************************************************/
 int Abc_CommandInvGet( Abc_Frame_t * pAbc, int argc, char ** argv )
 {
-    extern Abc_Ntk_t * Wlc_NtkGetInv( Wlc_Ntk_t * pNtk, Vec_Int_t * vInv );
+    extern Abc_Ntk_t * Wlc_NtkGetInv( Wlc_Ntk_t * pNtk, Vec_Int_t * vInv, Vec_Ptr_t * vNamesIn );
     Abc_Ntk_t * pMainNtk;
     Wlc_Ntk_t * pNtk = Wlc_AbcGetNtk(pAbc);
-    int c, fVerbose  = 0;
+    int c, i, fVerbose = 0, fFlopNamesFromGia = 0;
+    Vec_Ptr_t * vNamesIn = NULL;
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "vh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "fvh" ) ) != EOF )
     {
         switch ( c )
         {
+            case 'f':
+                fFlopNamesFromGia ^= 1;
+                break;
             case 'v':
                 fVerbose ^= 1;
                 break;
@@ -1741,16 +1754,38 @@ int Abc_CommandInvGet( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( 1, "Abc_CommandInvGet(): Invariant is not available.\n" );
         return 0;
     }
+    // See if we shall and can copy the PI names from the current GIA
+    if ( fFlopNamesFromGia )
+    {
+        if ( pAbc->pGia == NULL )
+        {
+            Abc_Print( 1, "Abc_CommandInvGet(): No network in &-space, cannot copy names.\n" );
+            fFlopNamesFromGia = 0;
+        }
+        else
+        {
+            vNamesIn = Vec_PtrStart( Gia_ManRegNum(pAbc->pGia) );
+            for ( i = 0; i < Gia_ManRegNum(pAbc->pGia); ++i )
+            {
+                // Only the registers
+                Vec_PtrSetEntry( vNamesIn, i, Extra_UtilStrsav( (const char*)Vec_PtrEntry( pAbc->pGia->vNamesIn, Gia_ManPiNum(pAbc->pGia)+i ) ) );
+            }
+        }
+    }
     // derive the network
-    pMainNtk = Wlc_NtkGetInv( pNtk, Wlc_AbcGetInv(pAbc) );
+    pMainNtk = Wlc_NtkGetInv( pNtk, Wlc_AbcGetInv(pAbc), vNamesIn );
+    // Delete names
+    if (vNamesIn)
+        Vec_PtrFree( vNamesIn );
     // replace the current network
     if ( pMainNtk )
         Abc_FrameReplaceCurrentNetwork( pAbc, pMainNtk );
     return 0;
 usage:
-    Abc_Print( -2, "usage: inv_get [-vh]\n" );
+    Abc_Print( -2, "usage: inv_get [-fvh]\n" );
     Abc_Print( -2, "\t         places invariant found by PDR as the current network in the main-space\n" );
-    Abc_Print( -2, "\t         (in the case of \'sat\' or \'undecided\', inifity clauses are used)\n" );
+    Abc_Print( -2, "\t         (in the case of \'sat\' or \'undecided\', infinity clauses are used)\n" );
+    Abc_Print( -2, "\t-f     : toggle reading flop names from the &-space [default = %s]\n", fFlopNamesFromGia? "yes": "no" );
     Abc_Print( -2, "\t-v     : toggle printing verbose information [default = %s]\n", fVerbose? "yes": "no" );
     Abc_Print( -2, "\t-h     : print the command usage\n");
     return 1;

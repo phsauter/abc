@@ -19,6 +19,7 @@
 ***********************************************************************/
 
 #include "kit.h"
+#include "misc/extra/extra.h"
 
 ABC_NAMESPACE_IMPL_START
 
@@ -385,7 +386,7 @@ Kit_Graph_t * Kit_TruthToGraph2( unsigned * pTruth0, unsigned * pTruth1, int nVa
     Kit_Graph_t * pGraph;
     int RetValue;
     // derive SOP
-    RetValue = Kit_TruthIsop2( pTruth0, pTruth1, nVars, vMemory, 1, 0 ); // tried 1 and found not useful in "renode"
+    RetValue = Kit_TruthIsop2( pTruth0, pTruth1, nVars, vMemory, 0, 0 ); // tried 1 and found not useful in "renode"
     if ( RetValue == -1 )
         return NULL;
     if ( Vec_IntSize(vMemory) > (1<<16) )
@@ -494,6 +495,31 @@ int * Kit_TruthTest( char * pFileName )
     for ( i = 0; i < 5; i++ )
         printf( "Function %3d :  AND2 = %3d  Lev = %3d\n", i, pResult[i] & 0xFFFF, pResult[i] >> 16 );
     return pResult;
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Derives the factored form from the truth table.]
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Kit_TruthLitNum( unsigned * pTruth, int nVars, Vec_Int_t * vMemory )
+{
+    Kit_Graph_t * pGraph;
+    int RetValue, nLits;
+    RetValue = Kit_TruthIsop( pTruth, nVars, vMemory, 1 ); 
+    if ( RetValue == -1 || Vec_IntSize(vMemory) > (1<<16) )
+        return -1;
+    assert( RetValue == 0 || RetValue == 1 );
+    pGraph = Kit_SopFactor( vMemory, RetValue, nVars, vMemory );
+    nLits = 1 + Kit_GraphNodeNum( pGraph );
+    Kit_GraphFree( pGraph );
+    return nLits;
 }
 
 ////////////////////////////////////////////////////////////////////////
