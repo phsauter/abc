@@ -2441,8 +2441,12 @@ void Abc_NtkDumpOneCexSpecial( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex 
 }
 
 
+extern Abc_Cex_t * Bmc_CexInnerStates( Gia_Man_t * p, Abc_Cex_t * pCex, Abc_Cex_t ** ppCexImpl, int fVerbose );
+extern Abc_Cex_t * Bmc_CexEssentialBits( Gia_Man_t * p, Abc_Cex_t * pCexState, Abc_Cex_t * pCexCare, int fVerbose );
+extern Abc_Cex_t * Bmc_CexCareBits( Gia_Man_t * p, Abc_Cex_t * pCexState, Abc_Cex_t * pCexImpl, Abc_Cex_t * pCexEss, int fFindAll, int fVerbose );
+
 void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex, 
-    int fPrintFull, int fNames, int fUseFfNames, int fMinimize, int fUseOldMin, 
+    int fPrintFull, int fNames, int fUseFfNames, int fMinimize, int fUseOldMin, int fCexInfo,
     int fCheckCex, int fUseSatBased, int fHighEffort, int fAiger, int fVerbose )
 {
     Abc_Obj_t * pObj;
@@ -2477,6 +2481,29 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
             }
             else if ( fUseSatBased )
                 pCare = Bmc_CexCareSatBasedMinimize( pAig, Saig_ManPiNum(pAig), pCex, fHighEffort, fCheckCex, fVerbose );
+            else if ( fCexInfo )
+            {
+                Gia_Man_t * p = Gia_ManFromAigSimple( pAig );
+                Abc_Cex_t * pCexImpl   = NULL;
+                Abc_Cex_t * pCexStates = Bmc_CexInnerStates( p, pCex, &pCexImpl, fVerbose );
+                Abc_Cex_t * pCexCare   = Bmc_CexCareBits( p, pCexStates, pCexImpl, NULL, 1, fVerbose );
+                Abc_Cex_t * pCexEss;
+
+                if ( fCheckCex && !Bmc_CexVerify( p, pCex, pCexCare ) )
+                    printf( "Counter-example care-set verification has failed.\n" );
+
+                pCexEss = Bmc_CexEssentialBits( p, pCexStates, pCexCare, fVerbose );
+
+                // pCare is pCexMin from Bmc_CexTest
+                pCare = Bmc_CexCareBits( p, pCexStates, pCexImpl, pCexEss, 0, fVerbose );
+
+                if ( fCheckCex && !Bmc_CexVerify( p, pCex, pCare ) )
+                    printf( "Counter-example min-set verification has failed.\n" );
+                Abc_CexFreeP( &pCexStates );
+                Abc_CexFreeP( &pCexImpl );
+                Abc_CexFreeP( &pCexCare );
+                Abc_CexFreeP( &pCexEss );
+            }
             else
                 pCare = Bmc_CexCareMinimize( pAig, Saig_ManPiNum(pAig), pCex, 4, fCheckCex, fVerbose );
             Aig_ManStop( pAig );
@@ -2581,9 +2608,10 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
     int fPrintFull = 0;
     int fUseFfNames = 0;
     int fVerbose   = 0;
+    int fCexInfo   = 0;
 
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "snmueocafzvh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "snmueocafzvhx" ) ) != EOF )
     {
         switch ( c )
         {
@@ -2619,6 +2647,9 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
                 break;
             case 'v':
                 fVerbose ^= 1;
+                break;
+            case 'x':
+                fCexInfo ^= 1;
                 break;
             case 'h':
                 goto usage;
@@ -2668,7 +2699,7 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
         if ( pAbc->pCex )
         {
             Abc_NtkDumpOneCex( pFile, pNtk, pCex, 
-                fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, 
+                fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, fCexInfo,
                 fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose );
         }
         else if ( pAbc->vCexVec )
@@ -2679,7 +2710,7 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
                     continue;
                 fprintf( pFile, "#\n#\n# CEX for output %d\n#\n", i ); 
                 Abc_NtkDumpOneCex( pFile, pNtk, pCex, 
-                    fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, 
+                    fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, fCexInfo,
                     fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose );
             }
         }
@@ -2724,6 +2755,7 @@ usage:
     fprintf( pAbc->Err, "\t-u     : use fast SAT-based CEX minimization [default = %s]\n", fUseSatBased? "yes": "no" );
     fprintf( pAbc->Err, "\t-e     : use high-effort SAT-based CEX minimization [default = %s]\n", fHighEffort? "yes": "no" );
     fprintf( pAbc->Err, "\t-o     : use old CEX minimization algorithm [default = %s]\n", fUseOldMin? "yes": "no" );
+    fprintf( pAbc->Err, "\t-x     : minimize using algorithm from cexinfo command [default = %s]\n", fCexInfo? "yes": "no" );
     fprintf( pAbc->Err, "\t-c     : check generated CEX using ternary simulation [default = %s]\n", fCheckCex? "yes": "no" );
     fprintf( pAbc->Err, "\t-a     : print cex in AIGER 1.9 format [default = %s]\n", fAiger? "yes": "no" );
     fprintf( pAbc->Err, "\t-f     : enable printing flop values in each timeframe [default = %s]\n", fPrintFull? "yes": "no" );  
