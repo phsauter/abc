@@ -49,7 +49,9 @@ SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 #include <sys/times.h>   
 #include <sys/resource.h>
 #include <unistd.h>      
+#if !defined(__wasm)
 #include <signal.h>      
+#endif
 #include <stdlib.h>
 #endif
 
@@ -132,7 +134,7 @@ int Abc_RealMain( int argc, char * argv[] )
                 break;                                          
 
             case 'm': {
-#if !defined(WIN32) && !defined(ABC_NO_RLIMIT)
+#if !defined(WIN32) && !defined(__wasm)
                 int maxMb = atoi(globalUtilOptarg);             
                 printf("Limiting memory use to %d MB\n", maxMb);
                 struct rlimit limit = {                         
@@ -144,7 +146,7 @@ int Abc_RealMain( int argc, char * argv[] )
                 break; 
             }                                         
             case 'l': {
-#if !defined(WIN32) && !defined(ABC_NO_RLIMIT)
+#if !defined(WIN32) && !defined(__wasm)
                 rlim_t maxTime = atoi(globalUtilOptarg);           
                 printf("Limiting time to %d seconds\n", (int)maxTime);
                 struct rlimit limit = {                         
