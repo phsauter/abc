@@ -2471,8 +2471,11 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
         {
             extern Aig_Man_t * Abc_NtkToDar( Abc_Ntk_t * pNtk, int fExors, int fRegisters );
             Aig_Man_t * pAig = Abc_NtkToDar( pNtk, 0, 1 );
-            fprintf( pFile, "# FALSIFYING OUTPUTS:");                                       
-            fprintf( pFile, " %s", Abc_ObjName(Abc_NtkCo(pNtk, pCex->iPo)) ); 
+            if ( fNames )
+            {
+                fprintf( pFile, "# FALSIFYING OUTPUTS:");
+                fprintf( pFile, " %s", Abc_ObjName(Abc_NtkCo(pNtk, pCex->iPo)) );
+            }
             if ( fUseOldMin )
             {
                 pCare = Saig_ManCbaFindCexCareBits( pAig, pCex, 0, fVerbose );
@@ -2582,6 +2585,8 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
                 fprintf( pFile, "\n");
             fprintf( pFile, "%c", (pCare && !Abc_InfoHasBit(pCare->pData, i)) ? 'x' : '0'+Abc_InfoHasBit(pCex->pData, i) );
         }
+        if ( fAiger )
+            fprintf( pFile, "\n");
         Abc_CexFreeP( &pCare );
     }
 }
