@@ -2441,10 +2441,15 @@ void Abc_NtkDumpOneCexSpecial( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex 
 }
 
 
+extern Abc_Cex_t * Bmc_CexInnerStates( Gia_Man_t * p, Abc_Cex_t * pCex, Abc_Cex_t ** ppCexImpl, int fVerbose );
+extern Abc_Cex_t * Bmc_CexEssentialBits( Gia_Man_t * p, Abc_Cex_t * pCexState, Abc_Cex_t * pCexCare, int fVerbose );
+extern Abc_Cex_t * Bmc_CexCareBits( Gia_Man_t * p, Abc_Cex_t * pCexState, Abc_Cex_t * pCexImpl, Abc_Cex_t * pCexEss, int fFindAll, int fVerbose );
+
 void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex, 
-    int fPrintFull, int fNames, int fUseFfNames, int fMinimize, int fUseOldMin, 
+    int fPrintFull, int fNames, int fUseFfNames, int fMinimize, int fUseOldMin, int fCexInfo,
     int fCheckCex, int fUseSatBased, int fHighEffort, int fAiger, int fVerbose )
 {
+    Abc_Cex_t * pCare = NULL;
     Abc_Obj_t * pObj;
     int i, f;
     if ( fPrintFull )
@@ -2460,15 +2465,17 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
                 fprintf( pFile, "%s@%d=%c ", Abc_ObjName(pObj), f, '0'+Abc_InfoHasBit(pCexFull->pData, Abc_NtkCiNum(pNtk)*f + i) );
         Abc_CexFreeP( &pCexFull );
     }
-    else if ( fNames )
+    else
     {
-        Abc_Cex_t * pCare = NULL;
+        if ( fNames )
+        {
+            fprintf( pFile, "# FALSIFYING OUTPUTS:");
+            fprintf( pFile, " %s", Abc_ObjName(Abc_NtkCo(pNtk, pCex->iPo)) );
+        }
         if ( fMinimize )
         {
             extern Aig_Man_t * Abc_NtkToDar( Abc_Ntk_t * pNtk, int fExors, int fRegisters );
             Aig_Man_t * pAig = Abc_NtkToDar( pNtk, 0, 1 );
-            fprintf( pFile, "# FALSIFYING OUTPUTS:");                                       
-            fprintf( pFile, " %s", Abc_ObjName(Abc_NtkCo(pNtk, pCex->iPo)) ); 
             if ( fUseOldMin )
             {
                 pCare = Saig_ManCbaFindCexCareBits( pAig, pCex, 0, fVerbose );
@@ -2477,20 +2484,41 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
             }
             else if ( fUseSatBased )
                 pCare = Bmc_CexCareSatBasedMinimize( pAig, Saig_ManPiNum(pAig), pCex, fHighEffort, fCheckCex, fVerbose );
+            else if ( fCexInfo )
+            {
+                Gia_Man_t * p = Gia_ManFromAigSimple( pAig );
+                Abc_Cex_t * pCexImpl   = NULL;
+                Abc_Cex_t * pCexStates = Bmc_CexInnerStates( p, pCex, &pCexImpl, fVerbose );
+                Abc_Cex_t * pCexCare   = Bmc_CexCareBits( p, pCexStates, pCexImpl, NULL, 1, fVerbose );
+                Abc_Cex_t * pCexEss;
+
+                if ( fCheckCex && !Bmc_CexVerify( p, pCex, pCexCare ) )
+                    printf( "Counter-example care-set verification has failed.\n" );
+
+                pCexEss = Bmc_CexEssentialBits( p, pCexStates, pCexCare, fVerbose );
+
+                // pCare is pCexMin from Bmc_CexTest
+                pCare = Bmc_CexCareBits( p, pCexStates, pCexImpl, pCexEss, 0, fVerbose );
+
+                if ( fCheckCex && !Bmc_CexVerify( p, pCex, pCare ) )
+                    printf( "Counter-example min-set verification has failed.\n" );
+                Abc_CexFreeP( &pCexStates );
+                Abc_CexFreeP( &pCexImpl );
+                Abc_CexFreeP( &pCexCare );
+                Abc_CexFreeP( &pCexEss );
+            }
             else
                 pCare = Bmc_CexCareMinimize( pAig, Saig_ManPiNum(pAig), pCex, 4, fCheckCex, fVerbose );
             Aig_ManStop( pAig );
-            if(pCare == NULL)                                           
+            if(pCare == NULL)
                 printf( "Counter-example minimization has failed.\n" ); 
         }
-        else
+        if (fNames)
         {
-            fprintf( pFile, "# FALSIFYING OUTPUTS:");                        
-            fprintf( pFile, " %s", Abc_ObjName(Abc_NtkCo(pNtk, pCex->iPo)) );
+                fprintf( pFile, "\n");
+                fprintf( pFile, "# COUNTEREXAMPLE LENGTH: %u\n", pCex->iFrame+1);
         }
-        fprintf( pFile, "\n");                                           
-        fprintf( pFile, "# COUNTEREXAMPLE LENGTH: %u\n", pCex->iFrame+1);
-        if ( fUseFfNames && Abc_NtkCheckSpecialPi(pNtk) )
+        if ( fNames && fUseFfNames && Abc_NtkCheckSpecialPi(pNtk) )
         {
             int * pValues;
             int nXValues = 0, iFlop = 0, iPivotPi = -1;
@@ -2532,26 +2560,27 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
         {
             // output flop values (unaffected by the minimization)
             Abc_NtkForEachLatch( pNtk, pObj, i )
-                fprintf( pFile, "%s@0=%c\n", Abc_ObjName(Abc_ObjFanout0(pObj)), '0'+!Abc_LatchIsInit0(pObj) );
+                if ( fNames )
+                    fprintf( pFile, "%s@0=%c\n", Abc_ObjName(Abc_ObjFanout0(pObj)), '0'+!Abc_LatchIsInit0(pObj) );
+                else
+                    fprintf( pFile, "%c", '0'+!Abc_LatchIsInit0(pObj) );
+            if ( !fNames )
+                fprintf( pFile, "\n");
             // output PI values (while skipping the minimized ones)
-            for ( f = 0; f <= pCex->iFrame; f++ )
+            for ( f = 0; f <= pCex->iFrame; f++ ) {
                 Abc_NtkForEachPi( pNtk, pObj, i )
                     if ( !pCare || Abc_InfoHasBit(pCare->pData, pCare->nRegs+pCare->nPis*f + i) )
-                        fprintf( pFile, "%s@%d=%c\n", Abc_ObjName(pObj), f, '0'+Abc_InfoHasBit(pCex->pData, pCex->nRegs+pCex->nPis*f + i) );
+                        if ( fNames )
+                            fprintf( pFile, "%s@%d=%c\n", Abc_ObjName(pObj), f, '0'+Abc_InfoHasBit(pCex->pData, pCex->nRegs+pCex->nPis*f + i) );
+                        else
+                            fprintf( pFile, "%c", '0'+Abc_InfoHasBit(pCex->pData, pCex->nRegs+pCex->nPis*f + i) );
+                    else if ( !fNames )
+                        fprintf( pFile, "x");
+                if ( !fNames )
+                    fprintf( pFile, "\n");
+            }
         }
         Abc_CexFreeP( &pCare );
-    }
-    else
-    {
-        Abc_NtkForEachLatch( pNtk, pObj, i )
-            fprintf( pFile, "%c", '0'+!Abc_LatchIsInit0(pObj) );
-
-        for ( i = pCex->nRegs; i < pCex->nBits; i++ )
-        {
-            if ( fAiger && (i-pCex->nRegs)%pCex->nPis == 0)
-                fprintf( pFile, "\n");
-            fprintf( pFile, "%c", '0'+Abc_InfoHasBit(pCex->pData, i) );
-        }
     }
 }
 
@@ -2581,9 +2610,10 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
     int fPrintFull = 0;
     int fUseFfNames = 0;
     int fVerbose   = 0;
+    int fCexInfo   = 0;
 
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "snmueocafzvh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "snmueocafzvhx" ) ) != EOF )
     {
         switch ( c )
         {
@@ -2619,6 +2649,9 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
                 break;
             case 'v':
                 fVerbose ^= 1;
+                break;
+            case 'x':
+                fCexInfo ^= 1;
                 break;
             case 'h':
                 goto usage;
@@ -2668,7 +2701,7 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
         if ( pAbc->pCex )
         {
             Abc_NtkDumpOneCex( pFile, pNtk, pCex, 
-                fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, 
+                fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, fCexInfo,
                 fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose );
         }
         else if ( pAbc->vCexVec )
@@ -2679,7 +2712,7 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
                     continue;
                 fprintf( pFile, "#\n#\n# CEX for output %d\n#\n", i ); 
                 Abc_NtkDumpOneCex( pFile, pNtk, pCex, 
-                    fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, 
+                    fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, fCexInfo,
                     fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose );
             }
         }
@@ -2724,6 +2757,7 @@ usage:
     fprintf( pAbc->Err, "\t-u     : use fast SAT-based CEX minimization [default = %s]\n", fUseSatBased? "yes": "no" );
     fprintf( pAbc->Err, "\t-e     : use high-effort SAT-based CEX minimization [default = %s]\n", fHighEffort? "yes": "no" );
     fprintf( pAbc->Err, "\t-o     : use old CEX minimization algorithm [default = %s]\n", fUseOldMin? "yes": "no" );
+    fprintf( pAbc->Err, "\t-x     : minimize using algorithm from cexinfo command [default = %s]\n", fCexInfo? "yes": "no" );
     fprintf( pAbc->Err, "\t-c     : check generated CEX using ternary simulation [default = %s]\n", fCheckCex? "yes": "no" );
     fprintf( pAbc->Err, "\t-a     : print cex in AIGER 1.9 format [default = %s]\n", fAiger? "yes": "no" );
     fprintf( pAbc->Err, "\t-f     : enable printing flop values in each timeframe [default = %s]\n", fPrintFull? "yes": "no" );  
