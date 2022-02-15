@@ -2449,6 +2449,7 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
     int fPrintFull, int fNames, int fUseFfNames, int fMinimize, int fUseOldMin, int fCexInfo,
     int fCheckCex, int fUseSatBased, int fHighEffort, int fAiger, int fVerbose )
 {
+    Abc_Cex_t * pCare = NULL;
     Abc_Obj_t * pObj;
     int i, f;
     if ( fPrintFull )
@@ -2464,9 +2465,8 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
                 fprintf( pFile, "%s@%d=%c ", Abc_ObjName(pObj), f, '0'+Abc_InfoHasBit(pCexFull->pData, Abc_NtkCiNum(pNtk)*f + i) );
         Abc_CexFreeP( &pCexFull );
     }
-    else if ( fNames )
+    else if ( fNames || fMinimize )
     {
-        Abc_Cex_t * pCare = NULL;
         if ( fMinimize )
         {
             extern Aig_Man_t * Abc_NtkToDar( Abc_Ntk_t * pNtk, int fExors, int fRegisters );
@@ -2509,6 +2509,8 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
             Aig_ManStop( pAig );
             if(pCare == NULL)                                           
                 printf( "Counter-example minimization has failed.\n" ); 
+	    if (!fNames)
+	        goto no_names;
         }
         else
         {
@@ -2570,6 +2572,7 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
     }
     else
     {
+    no_names:
         Abc_NtkForEachLatch( pNtk, pObj, i )
             fprintf( pFile, "%c", '0'+!Abc_LatchIsInit0(pObj) );
 
@@ -2577,8 +2580,9 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
         {
             if ( fAiger && (i-pCex->nRegs)%pCex->nPis == 0)
                 fprintf( pFile, "\n");
-            fprintf( pFile, "%c", '0'+Abc_InfoHasBit(pCex->pData, i) );
+            fprintf( pFile, "%c", (pCare && !Abc_InfoHasBit(pCare->pData, i)) ? 'x' : '0'+Abc_InfoHasBit(pCex->pData, i) );
         }
+        Abc_CexFreeP( &pCare );
     }
 }
 
