@@ -703,6 +703,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     int iPo = 0;
     nFrames = -1;
     int status = 0;
+    int i;
     while ( fgets( Buffer, 1000, pFile ) != NULL )
     {
         if ( Buffer[0] == '#' )
@@ -750,7 +751,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
                 state = 2;
                 break;
             case 2 :
-                for (int i=0; i<strlen(Buffer);i++) {
+                for (i=0; i<strlen(Buffer);i++) {
                     char c = Buffer[i];
                     if ( c == '0' || c == '1' )
                         Vec_IntPush( vNums, c - '0' );
@@ -765,7 +766,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
                 state = 3;
                 break;
             default:
-                for (int i=0; i<strlen(Buffer);i++) {
+                for (i=0; i<strlen(Buffer);i++) {
                     char c = Buffer[i];
                     if ( c == '0' || c == '1' )
                         Vec_IntPush( vNums, c - '0' );
@@ -782,7 +783,6 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
 
     if (usedX)
         printf( "Warning: Using 0 instead of x in latches or primary inputs\n" );
-    int i;
     Abc_Obj_t * pObj;
     int iFrameCex = nFrames;
     int nRegsNtk = 0;
