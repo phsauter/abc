@@ -44,6 +44,7 @@ static int IoCommandReadBblif   ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadBlif    ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadBlifMv  ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadBench   ( Abc_Frame_t * pAbc, int argc, char **argv );
+static int IoCommandReadCex     ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadDsd     ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadEdif    ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadEqn     ( Abc_Frame_t * pAbc, int argc, char **argv );
@@ -113,6 +114,7 @@ void Io_Init( Abc_Frame_t * pAbc )
     Cmd_CommandAdd( pAbc, "I/O", "read_blif",     IoCommandReadBlif,     1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_blif_mv",  IoCommandReadBlifMv,   1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_bench",    IoCommandReadBench,    1 );
+    Cmd_CommandAdd( pAbc, "I/O", "read_cex",      IoCommandReadCex,      1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_dsd",      IoCommandReadDsd,      1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_formula",  IoCommandReadDsd,      1 );
 //    Cmd_CommandAdd( pAbc, "I/O", "read_edif",     IoCommandReadEdif,     1 );
@@ -668,6 +670,271 @@ usage:
     return 1;
 }
 
+/**Function*************************************************************
+
+  Synopsis    []
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, int * pnFrames, int * fOldFormat )
+{
+    FILE * pFile;
+    Abc_Cex_t * pCex;
+    Vec_Int_t * vNums;
+    int c, nRegs = -1, nFrames = -1, Status = 0;
+    pFile = fopen( pFileName, "r" );
+    if ( pFile == NULL )
+    {
+        printf( "Cannot open log file for reading \"%s\".\n" , pFileName );
+        return -1;
+    }
+
+    vNums = Vec_IntAlloc( 100 );
+    int usedX = 0;
+    *fOldFormat = 0;
+    
+    char Buffer[1000];
+    int state = 0;
+    int iPo = 0;
+    nFrames = -1;
+    int status = 0;
+    while ( fgets( Buffer, 1000, pFile ) != NULL )
+    {
+        if ( Buffer[0] == '#' )
+            continue;
+        Buffer[strlen(Buffer) - 1] = '\0';
+        if (state==0 && strlen(Buffer)>1) {
+            // old format detected
+            *fOldFormat = 1;
+            state = 2;
+            iPo = 0;
+            status = 1;
+        }
+        if (state==1 && Buffer[0]!='b' && Buffer[0]!='c') {
+            // old format detected, first line was actually register
+            *fOldFormat = 1;
+            state = 3;
+            Vec_IntPush( vNums, status );
+            status = 1;
+        }
+        if (Buffer[0] == '.' )
+            break;
+        switch(state) {
+            case 0 :
+                {
+                    char c = Buffer[0];
+                    if ( c == '0' || c == '1' || c == '2' ) {
+                        status = c - '0' ;
+                        state = 1;
+                    } else if ( c == 'x' ) {
+                        // old format with one x state latch
+                        usedX = 1;
+                        // set to 2 so we can Abc_LatchSetInitNone
+                        // acts like 0 when setting bits
+                        Vec_IntPush( vNums, 2 );
+                        nRegs = Vec_IntSize(vNums);
+                        state = 3;
+                    } else {
+                        printf( "ERROR: Bad aiger status line.\n" );
+                        return -1;
+                    }
+                }
+                break;
+            case 1 :
+                iPo = atoi(Buffer+1);
+                state = 2;
+                break;
+            case 2 :
+                for (int i=0; i<strlen(Buffer);i++) {
+                    char c = Buffer[i];
+                    if ( c == '0' || c == '1' )
+                        Vec_IntPush( vNums, c - '0' );
+                    else if ( c == 'x') {
+                        usedX = 1;
+                        // set to 2 so we can Abc_LatchSetInitNone
+                        // acts like 0 when setting bits
+                        Vec_IntPush( vNums, 2 );
+                    }
+                }
+                nRegs = Vec_IntSize(vNums);
+                state = 3;
+                break;
+            default:
+                for (int i=0; i<strlen(Buffer);i++) {
+                    char c = Buffer[i];
+                    if ( c == '0' || c == '1' )
+                        Vec_IntPush( vNums, c - '0' );
+                    else if ( c == 'x') {
+                        usedX = 1;
+                        Vec_IntPush( vNums, 0 );
+                    }
+                }
+                nFrames++;
+                break;
+        }
+    }
+    fclose( pFile );
+
+    if (usedX)
+        printf( "Warning: Using 0 instead of x in latches or primary inputs\n" );
+    int i;
+    Abc_Obj_t * pObj;
+    int iFrameCex = nFrames;
+    int nRegsNtk = 0;
+    int nPiNtk = 0;
+    int nPoNtk = 0;
+    Abc_NtkForEachLatch( pNtk, pObj, i ) nRegsNtk++;
+    Abc_NtkForEachPi(pNtk, pObj, i ) nPiNtk++;
+    Abc_NtkForEachPo(pNtk, pObj, i ) nPoNtk++;
+    if ( nRegs < 0 )
+    {
+        printf( "ERROR: Cannot read register number.\n" );
+        Vec_IntFree( vNums );
+        return -1;
+    }
+    if ( nRegs != nRegsNtk )
+    {
+        printf( "ERROR: Register number not coresponding to Ntk.\n" );
+        Vec_IntFree( vNums );
+        return -1;
+    }
+    if ( Vec_IntSize(vNums)-nRegs == 0 )
+    {
+        printf( "ERROR: Cannot read counter example.\n" );
+        Vec_IntFree( vNums );
+        return -1;
+    }
+    if ( (Vec_IntSize(vNums)-nRegs) % (iFrameCex + 1) != 0 )
+    {
+        printf( "ERROR: Incorrect number of bits.\n" );
+        Vec_IntFree( vNums );
+        return -1;
+    }
+    int nPi = (Vec_IntSize(vNums)-nRegs)/(iFrameCex + 1);
+    if ( nPi != nPiNtk )
+    {
+        printf( "ERROR: Number of primary inputs not coresponding to Ntk.\n" );
+        Vec_IntFree( vNums );
+        return -1;
+    }
+    if ( iPo >= nPoNtk )
+    {
+        printf( "ERROR: PO that failed verification not coresponding to Ntk.\n" );
+        Vec_IntFree( vNums );
+        return -1;
+    }
+    Abc_NtkForEachLatch( pNtk, pObj, i ) {
+        if ( Vec_IntEntry(vNums, i) ==0)
+            Abc_LatchSetInit0(pObj);
+        else if ( Vec_IntEntry(vNums, i) ==2)
+            Abc_LatchSetInitNone(pObj);
+        else
+            Abc_LatchSetInit1(pObj);
+    }
+
+    pCex = Abc_CexAlloc( nRegs, nPi, iFrameCex + 1 );
+    // the zero-based number of PO, for which verification failed
+    // fails in Bmc_CexVerify if not less than actual number of PO
+    pCex->iPo    = iPo;
+    // the zero-based number of the time-frame, for which verificaiton failed
+    pCex->iFrame = iFrameCex;
+    assert( Vec_IntSize(vNums) == pCex->nBits );
+    for ( c = 0; c < pCex->nBits; c++ )
+        if ( Vec_IntEntry(vNums, c) == 1)
+            Abc_InfoSetBit( pCex->pData, c );
+    Vec_IntFree( vNums );
+    if ( ppCex )
+        *ppCex = pCex;
+    else
+        ABC_FREE( pCex );
+
+    if ( pnFrames )
+        *pnFrames = nFrames;
+    return Status;
+}
+
+/**Function*************************************************************
+
+  Synopsis    []
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+
+
+int IoCommandReadCex( Abc_Frame_t * pAbc, int argc, char ** argv )
+{
+    Abc_Ntk_t * pNtk;
+    char * pFileName;
+    FILE * pFile;
+    int fCheck;
+    int c;
+    int fOldFormat = 0;
+
+    fCheck = 1;
+    Extra_UtilGetoptReset();
+    while ( ( c = Extra_UtilGetopt( argc, argv, "ch" ) ) != EOF )
+    {
+        switch ( c )
+        {
+            case 'c':
+                fCheck ^= 1;
+                break;
+            case 'h':
+                goto usage;
+            default:
+                goto usage;
+        }
+    }
+    if ( argc != globalUtilOptind + 1 )
+        goto usage;
+
+    // get the input file name
+    pFileName = argv[globalUtilOptind];
+    if ( (pFile = fopen( pFileName, "r" )) == NULL )
+    {
+        fprintf( pAbc->Err, "Cannot open input file \"%s\". \n", pFileName );
+        return 1;
+    }
+    fclose( pFile );
+
+    pNtk = pAbc->pNtkCur;
+    if ( pNtk == NULL )
+    {
+        fprintf( pAbc->Out, "Empty network.\n" );
+        return 0;
+    }
+    Abc_FrameClearVerifStatus( pAbc );
+    pAbc->Status = Abc_NtkReadCexFile( pFileName, pNtk, &pAbc->pCex, &pAbc->nFrames, &fOldFormat );
+
+    if ( fCheck ) {
+        extern Aig_Man_t * Abc_NtkToDar( Abc_Ntk_t * pNtk, int fExors, int fRegisters );
+        Aig_Man_t * pAig = Abc_NtkToDar( pNtk, 0, 1 );
+        Bmc_CexCareVerify( pAig, pAbc->pCex, pAbc->pCex, false );
+        Aig_ManStop( pAig );
+    } else if (fOldFormat) {
+        fprintf( pAbc->Err, "Using old aiger format with no checks enabled.\n" );
+        return -1;
+    }
+    return 0;
+
+usage:
+    fprintf( pAbc->Err, "usage: read_cex [-ch] <file>\n" );
+    fprintf( pAbc->Err, "\t         reads the witness cex\n" );
+    fprintf( pAbc->Err, "\t-c     : toggle check after reading [default = %s]\n", fCheck? "yes":"no" );
+    fprintf( pAbc->Err, "\t-h     : prints the command summary\n" );
+    fprintf( pAbc->Err, "\tfile   : the name of a file to read\n" );
+    return 1;
+}
 /**Function*************************************************************
 
   Synopsis    []
@@ -2447,7 +2714,7 @@ extern Abc_Cex_t * Bmc_CexCareBits( Gia_Man_t * p, Abc_Cex_t * pCexState, Abc_Ce
 
 void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex, 
     int fPrintFull, int fNames, int fUseFfNames, int fMinimize, int fUseOldMin, int fCexInfo,
-    int fCheckCex, int fUseSatBased, int fHighEffort, int fAiger, int fVerbose )
+    int fCheckCex, int fUseSatBased, int fHighEffort, int fAiger, int fVerbose, int fExtended )
 {
     Abc_Cex_t * pCare = NULL;
     Abc_Obj_t * pObj;
@@ -2558,13 +2825,17 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
         }
         else
         {
+            if (fExtended && fAiger && !fNames) {
+                fprintf( pFile, "1\n");
+                fprintf( pFile, "b%d\n", pCex->iPo);
+            }
             // output flop values (unaffected by the minimization)
             Abc_NtkForEachLatch( pNtk, pObj, i )
                 if ( fNames )
                     fprintf( pFile, "%s@0=%c\n", Abc_ObjName(Abc_ObjFanout0(pObj)), '0'+!Abc_LatchIsInit0(pObj) );
                 else
                     fprintf( pFile, "%c", '0'+!Abc_LatchIsInit0(pObj) );
-            if ( !fNames )
+            if ( !fNames && fAiger)
                 fprintf( pFile, "\n");
             // output PI values (while skipping the minimized ones)
             for ( f = 0; f <= pCex->iFrame; f++ ) {
@@ -2576,9 +2847,11 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
                             fprintf( pFile, "%c", '0'+Abc_InfoHasBit(pCex->pData, pCex->nRegs+pCex->nPis*f + i) );
                     else if ( !fNames )
                         fprintf( pFile, "x");
-                if ( !fNames )
+                if ( !fNames && fAiger)
                     fprintf( pFile, "\n");
             }
+            if (fExtended && fAiger && !fNames)
+                fprintf( pFile, ".\n");
         }
         Abc_CexFreeP( &pCare );
     }
@@ -2611,9 +2884,10 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
     int fUseFfNames = 0;
     int fVerbose   = 0;
     int fCexInfo   = 0;
+    int fExtended  = 0;
 
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "snmueocafzvhx" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "snmueocafzvhxt" ) ) != EOF )
     {
         switch ( c )
         {
@@ -2652,6 +2926,9 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
                 break;
             case 'x':
                 fCexInfo ^= 1;
+                break;
+            case 't':
+                fExtended ^= 1;
                 break;
             case 'h':
                 goto usage;
@@ -2702,7 +2979,7 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
         {
             Abc_NtkDumpOneCex( pFile, pNtk, pCex, 
                 fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, fCexInfo,
-                fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose );
+                fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose, fExtended );
         }
         else if ( pAbc->vCexVec )
         {
@@ -2710,10 +2987,10 @@ int IoCommandWriteCex( Abc_Frame_t * pAbc, int argc, char **argv )
             {
                 if ( pCex == NULL )
                     continue;
-                fprintf( pFile, "#\n#\n# CEX for output %d\n#\n", i ); 
+                fprintf( pFile, "#\n#\n# CEX for output %d\n#\n", i );
                 Abc_NtkDumpOneCex( pFile, pNtk, pCex, 
                     fPrintFull, fNames, fUseFfNames, fMinimize, fUseOldMin, fCexInfo,
-                    fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose );
+                    fCheckCex, fUseSatBased, fHighEffort, fAiger, fVerbose, fExtended );
             }
         }
         fprintf( pFile, "# DONE\n" ); 
@@ -2760,6 +3037,7 @@ usage:
     fprintf( pAbc->Err, "\t-x     : minimize using algorithm from cexinfo command [default = %s]\n", fCexInfo? "yes": "no" );
     fprintf( pAbc->Err, "\t-c     : check generated CEX using ternary simulation [default = %s]\n", fCheckCex? "yes": "no" );
     fprintf( pAbc->Err, "\t-a     : print cex in AIGER 1.9 format [default = %s]\n", fAiger? "yes": "no" );
+    fprintf( pAbc->Err, "\t-t     : extended header info when cex in AIGER 1.9 format [default = %s]\n", fAiger? "yes": "no" );
     fprintf( pAbc->Err, "\t-f     : enable printing flop values in each timeframe [default = %s]\n", fPrintFull? "yes": "no" );  
     fprintf( pAbc->Err, "\t-z     : toggle using saved flop names [default = %s]\n", fUseFfNames? "yes": "no" );  
     fprintf( pAbc->Err, "\t-v     : enable verbose output [default = %s]\n", fVerbose? "yes": "no" );  
