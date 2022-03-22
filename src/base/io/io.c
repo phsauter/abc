@@ -698,13 +698,16 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     int usedX = 0;
     *fOldFormat = 0;
     
-    char Buffer[1000];
+    int MaxLine = 1000000;
+    char *Buffer;
     int state = 0;
     int iPo = 0;
     nFrames = -1;
     int status = 0;
     int i;
-    while ( fgets( Buffer, 1000, pFile ) != NULL )
+
+    Buffer = ABC_ALLOC( char, MaxLine );
+    while ( fgets( Buffer, MaxLine, pFile ) != NULL )
     {
         if ( Buffer[0] == '#' )
             continue;
