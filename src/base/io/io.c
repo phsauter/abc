@@ -705,6 +705,9 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     nFrames = -1;
     int status = 0;
     int i;
+    int nRegsNtk = 0;
+    Abc_Obj_t * pObj;
+    Abc_NtkForEachLatch( pNtk, pObj, i ) nRegsNtk++;
 
     Buffer = ABC_ALLOC( char, MaxLine );
     while ( fgets( Buffer, MaxLine, pFile ) != NULL )
@@ -766,6 +769,14 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
                     }
                 }
                 nRegs = Vec_IntSize(vNums);
+                if ( nRegs < nRegsNtk )
+                {
+                    printf( "WARNING: Register number is smaller then in Ntk. Appending.\n" );
+                    for (i=0; i<nRegsNtk-nRegs;i++) {
+                        Vec_IntPush( vNums, 0 );
+                    }
+                    nRegs = Vec_IntSize(vNums);
+                }
                 state = 3;
                 break;
             default:
@@ -786,12 +797,9 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
 
     if (usedX)
         printf( "Warning: Using 0 instead of x in latches or primary inputs\n" );
-    Abc_Obj_t * pObj;
     int iFrameCex = nFrames;
-    int nRegsNtk = 0;
     int nPiNtk = 0;
     int nPoNtk = 0;
-    Abc_NtkForEachLatch( pNtk, pObj, i ) nRegsNtk++;
     Abc_NtkForEachPi(pNtk, pObj, i ) nPiNtk++;
     Abc_NtkForEachPo(pNtk, pObj, i ) nPoNtk++;
     if ( nRegs < 0 )
