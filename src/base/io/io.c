@@ -712,7 +712,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     Buffer = ABC_ALLOC( char, MaxLine );
     while ( fgets( Buffer, MaxLine, pFile ) != NULL )
     {
-        if ( Buffer[0] == '#' )
+        if ( Buffer[0] == '#' || Buffer[0] == 'c' || Buffer[0] == 'f' || Buffer[0] == 'u' )
             continue;
         Buffer[strlen(Buffer) - 1] = '\0';
         if (state==0 && strlen(Buffer)>1) {
@@ -722,7 +722,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
             iPo = 0;
             status = 1;
         }
-        if (state==1 && Buffer[0]!='b' && Buffer[0]!='c') {
+        if (state==1 && Buffer[0]!='b' && Buffer[0]!='j') {
             // old format detected, first line was actually register
             *fOldFormat = 1;
             state = 3;
