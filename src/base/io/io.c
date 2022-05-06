@@ -686,7 +686,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     FILE * pFile;
     Abc_Cex_t * pCex;
     Vec_Int_t * vNums;
-    int c, nRegs = -1, nFrames = -1, Status = 0;
+    int c, nRegs = -1, nFrames = -1;
     pFile = fopen( pFileName, "r" );
     if ( pFile == NULL )
     {
@@ -804,7 +804,10 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     Abc_NtkForEachPo(pNtk, pObj, i ) nPoNtk++;
     if ( nRegs < 0 )
     {
-        printf( "ERROR: Cannot read register number.\n" );
+        if (status == 1)
+            printf( "ERROR: Cannot read register number.\n" );
+        else
+            printf( "Counter-example is not available.\n" );
         Vec_IntFree( vNums );
         return -1;
     }
@@ -866,7 +869,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
 
     if ( pnFrames )
         *pnFrames = nFrames;
-    return Status;
+    return status;
 }
 
 /**Function*************************************************************
@@ -927,7 +930,7 @@ int IoCommandReadCex( Abc_Frame_t * pAbc, int argc, char ** argv )
     Abc_FrameClearVerifStatus( pAbc );
     pAbc->Status = Abc_NtkReadCexFile( pFileName, pNtk, &pAbc->pCex, &pAbc->nFrames, &fOldFormat );
 
-    if ( fCheck ) {
+    if ( fCheck && pAbc->Status==1) {
         extern Aig_Man_t * Abc_NtkToDar( Abc_Ntk_t * pNtk, int fExors, int fRegisters );
         Aig_Man_t * pAig = Abc_NtkToDar( pNtk, 0, 1 );
         Bmc_CexCareVerify( pAig, pAbc->pCex, pAbc->pCex, false );
