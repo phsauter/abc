@@ -804,10 +804,10 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     Abc_NtkForEachPo(pNtk, pObj, i ) nPoNtk++;
     if ( nRegs < 0 )
     {
-        if (status == 1)
-            printf( "ERROR: Cannot read register number.\n" );
-        else
+        if (status == 0 || *fOldFormat == 0)
             printf( "Counter-example is not available.\n" );
+        else
+            printf( "ERROR: Cannot read register number.\n" );
         Vec_IntFree( vNums );
         return -1;
     }
