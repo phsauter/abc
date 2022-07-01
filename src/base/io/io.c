@@ -777,6 +777,12 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
                     }
                     nRegs = Vec_IntSize(vNums);
                 }
+                else if ( nRegs > nRegsNtk )
+                {
+                    printf( "WARNING: Register number is larger then in Ntk. Truncating.\n" );
+                    Vec_IntShrink( vNums, nRegsNtk );
+                    nRegs = nRegsNtk;
+                }
                 state = 3;
                 break;
             default:
