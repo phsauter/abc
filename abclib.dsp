@@ -1127,6 +1127,18 @@ SOURCE=.\src\base\wln\wln.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\base\wln\wlnBlast.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\base\wln\wlnCom.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\base\wln\wlnGuide.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\base\wln\wlnMem.c
 # End Source File
 # Begin Source File
@@ -1143,7 +1155,15 @@ SOURCE=.\src\base\wln\wlnObj.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\base\wln\wlnRead.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\base\wln\wlnRetime.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\base\wln\wlnRtl.c
 # End Source File
 # Begin Source File
 
@@ -4911,6 +4931,14 @@ SOURCE=.\src\aig\gia\giaCSatOld.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaCSatP.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaCSatP.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaCTas.c
 # End Source File
 # Begin Source File
@@ -5127,6 +5155,10 @@ SOURCE=.\src\aig\gia\giaResub3.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaResub6.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaRetime.c
 # End Source File
 # Begin Source File
@@ -5180,6 +5212,10 @@ SOURCE=.\src\aig\gia\giaShrink6.c
 # Begin Source File
 
 SOURCE=.\src\aig\gia\giaShrink7.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaSif.c
 # End Source File
 # Begin Source File
 
@@ -5564,6 +5600,10 @@ SOURCE=.\src\proof\cec\cecSatG.c
 # Begin Source File
 
 SOURCE=.\src\proof\cec\cecSatG2.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\proof\cec\cecSatG3.c
 # End Source File
 # Begin Source File
 
