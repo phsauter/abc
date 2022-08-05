@@ -2820,7 +2820,12 @@ void Abc_NtkDumpOneCex( FILE * pFile, Abc_Ntk_t * pNtk, Abc_Cex_t * pCex,
                     Bmc_CexCareVerify( pAig, pCex, pCare, fVerbose );
             }
             else if ( fUseSatBased )
-                pCare = Bmc_CexCareSatBasedMinimize( pAig, Saig_ManPiNum(pAig), pCex, fHighEffort, fCheckCex, fVerbose );
+            {
+                if ( Abc_NtkPoNum( pNtk ) == 1 )
+                    pCare = Bmc_CexCareSatBasedMinimize( pAig, Saig_ManPiNum(pAig), pCex, fHighEffort, fCheckCex, fVerbose );
+                else
+                    printf( "SAT-based CEX minimization requires having a single PO.\n" );
+            }
             else if ( fCexInfo )
             {
                 Gia_Man_t * p = Gia_ManFromAigSimple( pAig );
