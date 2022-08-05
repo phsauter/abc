@@ -683,10 +683,11 @@ usage:
   SeeAlso     []
 
 ***********************************************************************/
-int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, int * pnFrames, int * fOldFormat )
+int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, Abc_Cex_t ** ppCexCare, int * pnFrames, int * fOldFormat, int xMode )
 {
     FILE * pFile;
     Abc_Cex_t * pCex;
+    Abc_Cex_t * pCexCare;
     Vec_Int_t * vNums;
     int c, nRegs = -1, nFrames = -1;
     pFile = fopen( pFileName, "r" );
@@ -702,6 +703,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     
     int MaxLine = 1000000;
     char *Buffer;
+    int BufferLen = 0;
     int state = 0;
     int iPo = 0;
     nFrames = -1;
@@ -716,8 +718,9 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     {
         if ( Buffer[0] == '#' || Buffer[0] == 'c' || Buffer[0] == 'f' || Buffer[0] == 'u' )
             continue;
-        Buffer[strlen(Buffer) - 1] = '\0';
-        if (state==0 && strlen(Buffer)>1) {
+        BufferLen = strlen(Buffer) - 1;
+        Buffer[BufferLen] = '\0';
+        if (state==0 && BufferLen>1) {
             // old format detected
             *fOldFormat = 1;
             state = 2;
@@ -759,7 +762,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
                 state = 2;
                 break;
             case 2 :
-                for (i=0; i<strlen(Buffer);i++) {
+                for (i=0; i<BufferLen;i++) {
                     char c = Buffer[i];
                     if ( c == '0' || c == '1' )
                         Vec_IntPush( vNums, c - '0' );
@@ -773,7 +776,7 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
                 nRegs = Vec_IntSize(vNums);
                 if ( nRegs < nRegsNtk )
                 {
-                    printf( "WARNING: Register number is smaller then in Ntk. Appending.\n" );
+                    printf( "WARNING: Register number is smaller than in Ntk. Appending.\n" );
                     for (i=0; i<nRegsNtk-nRegs;i++) {
                         Vec_IntPush( vNums, 0 );
                     }
@@ -781,20 +784,20 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
                 }
                 else if ( nRegs > nRegsNtk )
                 {
-                    printf( "WARNING: Register number is larger then in Ntk. Truncating.\n" );
+                    printf( "WARNING: Register number is larger than in Ntk. Truncating.\n" );
                     Vec_IntShrink( vNums, nRegsNtk );
                     nRegs = nRegsNtk;
                 }
                 state = 3;
                 break;
             default:
-                for (i=0; i<strlen(Buffer);i++) {
+                for (i=0; i<BufferLen;i++) {
                     char c = Buffer[i];
                     if ( c == '0' || c == '1' )
                         Vec_IntPush( vNums, c - '0' );
                     else if ( c == 'x') {
                         usedX = 1;
-                        Vec_IntPush( vNums, 0 );
+                        Vec_IntPush( vNums, 2 );
                     }
                 }
                 nFrames++;
@@ -803,13 +806,9 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
     }
     fclose( pFile );
 
-    if (usedX)
+    if (usedX && !xMode)
         printf( "Warning: Using 0 instead of x in latches or primary inputs\n" );
     int iFrameCex = nFrames;
-    int nPiNtk = 0;
-    int nPoNtk = 0;
-    Abc_NtkForEachPi(pNtk, pObj, i ) nPiNtk++;
-    Abc_NtkForEachPo(pNtk, pObj, i ) nPoNtk++;
     if ( nRegs < 0 )
     {
         if (status == 0 || *fOldFormat == 0)
@@ -838,42 +837,61 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
         return -1;
     }
     int nPi = (Vec_IntSize(vNums)-nRegs)/(iFrameCex + 1);
-    if ( nPi != nPiNtk )
+    if ( nPi != Abc_NtkPiNum(pNtk) )
     {
         printf( "ERROR: Number of primary inputs not coresponding to Ntk.\n" );
         Vec_IntFree( vNums );
         return -1;
     }
-    if ( iPo >= nPoNtk )
+    if ( iPo >= Abc_NtkPoNum(pNtk) )
     {
-        printf( "ERROR: PO that failed verification not coresponding to Ntk.\n" );
-        Vec_IntFree( vNums );
-        return -1;
+        printf( "WARNING: PO that failed verification not coresponding to Ntk, using first PO instead.\n" );
+        iPo = 0;
     }
     Abc_NtkForEachLatch( pNtk, pObj, i ) {
-        if ( Vec_IntEntry(vNums, i) ==0)
-            Abc_LatchSetInit0(pObj);
-        else if ( Vec_IntEntry(vNums, i) ==2)
+        if ( Vec_IntEntry(vNums, i) == 1 )
+            Abc_LatchSetInit1(pObj);
+        else if ( Vec_IntEntry(vNums, i) == 2 && xMode )
             Abc_LatchSetInitNone(pObj);
         else
-            Abc_LatchSetInit1(pObj);
+            Abc_LatchSetInit0(pObj);
     }
 
     pCex = Abc_CexAlloc( nRegs, nPi, iFrameCex + 1 );
+    pCexCare = Abc_CexAlloc( nRegs, nPi, iFrameCex + 1);
     // the zero-based number of PO, for which verification failed
     // fails in Bmc_CexVerify if not less than actual number of PO
     pCex->iPo    = iPo;
+    pCexCare->iPo = iPo;
     // the zero-based number of the time-frame, for which verificaiton failed
     pCex->iFrame = iFrameCex;
+    pCexCare->iFrame = iFrameCex;
     assert( Vec_IntSize(vNums) == pCex->nBits );
-    for ( c = 0; c < pCex->nBits; c++ )
+    for ( c = 0; c < pCex->nBits; c++ ) {
         if ( Vec_IntEntry(vNums, c) == 1)
+        {
             Abc_InfoSetBit( pCex->pData, c );
+            Abc_InfoSetBit( pCexCare->pData, c );
+        }
+        else if ( Vec_IntEntry(vNums, c) == 2 && xMode )
+        {
+            // nothing to set
+        }
+        else
+            Abc_InfoSetBit( pCexCare->pData, c );
+    }
+
     Vec_IntFree( vNums );
+    Abc_CexFreeP( ppCex );
     if ( ppCex )
         *ppCex = pCex;
     else
-        ABC_FREE( pCex );
+        Abc_CexFree( pCex );
+    Abc_CexFreeP( ppCexCare );
+    if ( ppCexCare )
+        *ppCexCare = pCexCare;
+    else
+        Abc_CexFree( pCexCare );
 
     if ( pnFrames )
         *pnFrames = nFrames;
@@ -896,20 +914,26 @@ int Abc_NtkReadCexFile( char * pFileName, Abc_Ntk_t * pNtk, Abc_Cex_t ** ppCex, 
 int IoCommandReadCex( Abc_Frame_t * pAbc, int argc, char ** argv )
 {
     Abc_Ntk_t * pNtk;
+    Abc_Cex_t * pCex = NULL;
+    Abc_Cex_t * pCexCare = NULL;
     char * pFileName;
     FILE * pFile;
-    int fCheck;
+    int fCheck = 1;
+    int fXMode = 0;
     int c;
     int fOldFormat = 0;
+    int verified;
 
-    fCheck = 1;
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "ch" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "cxh" ) ) != EOF )
     {
         switch ( c )
         {
             case 'c':
                 fCheck ^= 1;
+                break;
+            case 'x':
+                fXMode ^= 1;
                 break;
             case 'h':
                 goto usage;
@@ -936,16 +960,31 @@ int IoCommandReadCex( Abc_Frame_t * pAbc, int argc, char ** argv )
         return 0;
     }
     Abc_FrameClearVerifStatus( pAbc );
-    pAbc->Status = Abc_NtkReadCexFile( pFileName, pNtk, &pAbc->pCex, &pAbc->nFrames, &fOldFormat );
+    pAbc->Status = Abc_NtkReadCexFile( pFileName, pNtk, &pCex, &pCexCare, &pAbc->nFrames, &fOldFormat, fXMode);
+    if ( fOldFormat && !fCheck )
+        printf( "WARNING: Old witness format detected and checking is disabled. Reading might have failed.\n" );
 
     if ( fCheck && pAbc->Status==1) {
         extern Aig_Man_t * Abc_NtkToDar( Abc_Ntk_t * pNtk, int fExors, int fRegisters );
         Aig_Man_t * pAig = Abc_NtkToDar( pNtk, 0, 1 );
-        Bmc_CexCareVerify( pAig, pAbc->pCex, pAbc->pCex, false );
-        Aig_ManStop( pAig );
-    } else if (fOldFormat) {
-        fprintf( pAbc->Err, "Using old aiger format with no checks enabled.\n" );
-        return -1;
+
+        verified = Bmc_CexCareVerify( pAig, pCex, pCexCare, false );
+        if (!verified)
+        {
+            printf( "Checking CEX for any PO.\n" );
+            int verified = Bmc_CexCareVerifyAnyPo( pAig, pCex, pCexCare, false );
+            Aig_ManStop( pAig );
+            if (verified < 0)
+            {
+                Abc_CexFreeP(&pCex);
+                Abc_CexFreeP(&pCexCare);
+                return 1;
+            }
+            pAbc->pCex->iPo = verified;
+        }
+
+        Abc_CexFreeP(&pCexCare);
+        Abc_FrameReplaceCex( pAbc, &pCex );
     }
     return 0;
 
@@ -953,6 +992,7 @@ usage:
     fprintf( pAbc->Err, "usage: read_cex [-ch] <file>\n" );
     fprintf( pAbc->Err, "\t         reads the witness cex\n" );
     fprintf( pAbc->Err, "\t-c     : toggle check after reading [default = %s]\n", fCheck? "yes":"no" );
+    fprintf( pAbc->Err, "\t-x     : read x bits for verification [default = %s]\n", fXMode? "yes":"no" );
     fprintf( pAbc->Err, "\t-h     : prints the command summary\n" );
     fprintf( pAbc->Err, "\tfile   : the name of a file to read\n" );
     return 1;
