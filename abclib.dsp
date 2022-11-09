@@ -5191,6 +5191,10 @@ SOURCE=.\src\aig\gia\giaSatoko.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\aig\gia\giaSatSyn.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\aig\gia\giaScl.c
 # End Source File
 # Begin Source File
@@ -5292,6 +5296,10 @@ SOURCE=.\src\aig\gia\giaTruth.c
 # Begin Source File
 
 SOURCE=.\src\aig\gia\giaTsim.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\src\aig\gia\giaTtopt.cpp
 # End Source File
 # Begin Source File
 
