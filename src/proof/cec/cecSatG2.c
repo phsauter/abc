@@ -875,7 +875,7 @@ static inline void Cec4_ObjSimCi( Gia_Man_t * p, int iObj )
     int w;
     word * pSim = Cec4_ObjSim( p, iObj );
     for ( w = 0; w < p->nSimWords; w++ )
-        pSim[w] = Gia_ManRandomW( 0 );
+        pSim[w] = Abc_RandomW( 0 );
     pSim[0] <<= 1;
 }
 static inline void Cec4_ObjClearSimCi( Gia_Man_t * p, int iObj )
@@ -1729,6 +1729,27 @@ Gia_Obj_t * Cec4_ManFindRepr( Gia_Man_t * p, Cec4_Man_t * pMan, int iObj )
     pMan->timeResimLoc += Abc_Clock() - clk;
     return NULL;
 }
+void Gia_ManRemoveWrongChoices( Gia_Man_t * p )
+{
+    int i, iObj, iPrev, Counter = 0;
+    Gia_ManForEachClass( p, i )
+    {
+        for ( iPrev = i, iObj = Gia_ObjNext(p, i); -1 < iObj; iObj = Gia_ObjNext(p, iPrev) )
+        {
+            Gia_Obj_t * pRepr = Gia_ObjReprObj(p, iObj);
+            if( !Gia_ObjFailed(p,iObj) && Abc_Lit2Var(Gia_ManObj(p,iObj)->Value) == Abc_Lit2Var(pRepr->Value) )
+            {
+                iPrev = iObj;
+                continue;
+            }
+            Gia_ObjSetRepr( p, iObj, GIA_VOID );
+            Gia_ObjSetNext( p, iPrev, Gia_ObjNext(p, iObj) );
+            Gia_ObjSetNext( p, iObj, 0 );
+            Counter++;
+        }
+    }
+    //Abc_Print( 1, "Removed %d wrong choices.\n", Counter );
+}
 int Cec4_ManPerformSweeping( Gia_Man_t * p, Cec_ParFra_t * pPars, Gia_Man_t ** ppNew, int fSimOnly )
 {
     Cec4_Man_t * pMan = Cec4_ManCreate( p, pPars ); 
@@ -1743,7 +1764,7 @@ int Cec4_ManPerformSweeping( Gia_Man_t * p, Cec_ParFra_t * pPars, Gia_Man_t ** p
         assert( Gia_ObjId(p, pObj) == i+1 );
 
     // check if any output trivially fails under all-0 pattern
-    Gia_ManRandom( 1 );
+    Abc_Random( 1 );
     Gia_ManSetPhase( p );
     if ( pPars->nLevelMax )
         Gia_ManLevelNum(p);
@@ -1864,6 +1885,9 @@ finalize:
     Cec4_ManDestroy( pMan );
     //Gia_ManStaticFanoutStop( p );
     //Gia_ManEquivPrintClasses( p, 1, 0 );
+    if ( ppNew && *ppNew == NULL )
+        *ppNew = Gia_ManDup(p);
+    Gia_ManRemoveWrongChoices( p );
     return p->pCexSeq ? 0 : 1;
 }
 Gia_Man_t * Cec4_ManSimulateTest( Gia_Man_t * p, Cec_ParFra_t * pPars )
