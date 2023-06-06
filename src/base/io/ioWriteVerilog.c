@@ -561,7 +561,7 @@ void Io_WriteVerilogObjects( FILE * pFile, Abc_Ntk_t * pNtk, int fOnlyAnds )
         vLevels = Vec_VecAlloc( 10 );
         Abc_NtkForEachNode( pNtk, pObj, i )
         {
-            if ( Abc_ObjFaninNum(pObj) == 1 || Abc_ObjIsCo(Abc_ObjFanout0(Abc_ObjFanout0(pObj))) )
+            if ( Abc_ObjFaninNum(pObj) == 1 && Abc_ObjIsCo(Abc_ObjFanout0(Abc_ObjFanout0(pObj))) )
             {
                 int iLit = Abc_Var2Lit( Abc_ObjId( Abc_ObjFanin0(Abc_ObjFanin0(pObj)) ), Abc_NodeIsInv(pObj) );
                 int iObj = Vec_IntEntry( vMap, iLit );
