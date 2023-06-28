@@ -28530,14 +28530,16 @@ int Abc_CommandFold( Abc_Frame_t * pAbc, int argc, char ** argv )
     Abc_Ntk_t * pNtk, * pNtkRes;
     int fCompl;
     int fVerbose;
+    int fSeqCleanup;
     int c;
-    extern Abc_Ntk_t * Abc_NtkDarFold( Abc_Ntk_t * pNtk, int fCompl, int fVerbose );
+    extern Abc_Ntk_t * Abc_NtkDarFold( Abc_Ntk_t * pNtk, int fCompl, int fVerbose, int fSeqCleanup );
     pNtk = Abc_FrameReadNtk(pAbc);
     // set defaults
     fCompl    =   0;
     fVerbose  =   0;
+    fSeqCleanup = 1;
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "cvh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "cvsh" ) ) != EOF )
     {
         switch ( c )
         {
@@ -28546,6 +28548,9 @@ int Abc_CommandFold( Abc_Frame_t * pAbc, int argc, char ** argv )
             break;
         case 'v':
             fVerbose ^= 1;
+            break;
+        case 's':
+            fSeqCleanup ^= 1;
             break;
         case 'h':
             goto usage;
@@ -28576,7 +28581,7 @@ int Abc_CommandFold( Abc_Frame_t * pAbc, int argc, char ** argv )
     if ( Abc_NtkIsComb(pNtk) )
         Abc_Print( 0, "The network is combinational.\n" );
     // modify the current network
-    pNtkRes = Abc_NtkDarFold( pNtk, fCompl, fVerbose );
+    pNtkRes = Abc_NtkDarFold( pNtk, fCompl, fVerbose, fSeqCleanup );
     if ( pNtkRes == NULL )
     {
         Abc_Print( 1,"Transformation has failed.\n" );
@@ -28591,6 +28596,7 @@ usage:
     Abc_Print( -2, "\t         (constraints fail when any of them becomes 1 in any timeframe)\n" );
     Abc_Print( -2, "\t-c     : toggle complementing constraints while folding [default = %s]\n", fCompl? "yes": "no" );
     Abc_Print( -2, "\t-v     : toggle printing verbose information [default = %s]\n", fVerbose? "yes": "no" );
+    Abc_Print( -2, "\t-s     : toggle performing sequential cleanup [default = %s]\n", fSeqCleanup? "yes": "no" );
     Abc_Print( -2, "\t-h     : print the command usage\n");
     return 1;
 }
