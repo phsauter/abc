@@ -137,11 +137,11 @@ endif
 
 # LIBS := -ldl -lrt
 LIBS += -lm
-ifneq ($(OS), FreeBSD)
+ifneq ($(OS), $(filter $(OS), FreeBSD OpenBSD))
   LIBS += -ldl
 endif
 
-ifneq ($(findstring Darwin, $(shell uname)), Darwin)
+ifneq ($(OS), $(filter $(OS), FreeBSD OpenBSD Darwin))
    LIBS += -lrt
 endif
 
@@ -206,7 +206,10 @@ depend: $(DEP)
 
 clean:
 	@echo "$(MSG_PREFIX)\`\` Cleaning up..."
-	$(VERBOSE)rm -rvf $(PROG) lib$(PROG).a $(OBJ) $(GARBAGE) $(OBJ:.o=.d)
+	$(VERBOSE)rm -rvf $(PROG) lib$(PROG).a
+	$(VERBOSE)rm -rvf $(OBJ)
+	$(VERBOSE)rm -rvf $(GARBAGE)
+	$(VERBOSE)rm -rvf $(OBJ:.o=.d)
 
 tags:
 	etags `find . -type f -regex '.*\.\(c\|h\)'`
