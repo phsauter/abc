@@ -1037,7 +1037,7 @@ Vec_Str_t * Abc_SclProduceGenlibStrProfile( SC_Lib * p, Mio_Library_t * pLib, fl
         *pnCellCount = Count;
     return vStr;
 }
-void Abc_SclDumpGenlib( char * pFileName, SC_Lib * p, float SlewInit, float Gain, int nGatesMin )
+void Abc_SclDumpGenlib( char * pFileName, SC_Lib * p, float SlewInit, float Gain, int fUseAll, int nGatesMin )
 {
     int nCellCount = 0;
     char FileName[1000];
@@ -1054,7 +1054,7 @@ void Abc_SclDumpGenlib( char * pFileName, SC_Lib * p, float SlewInit, float Gain
         printf( "Cannot open file \"%s\" for writing.\n", FileName );
         return;
     }
-    vStr = Abc_SclProduceGenlibStr( p, Slew, Gain, nGatesMin, 0, &nCellCount );
+    vStr = Abc_SclProduceGenlibStr( p, Slew, Gain, nGatesMin, fUseAll, &nCellCount );
     fprintf( pFile, "%s", Vec_StrArray(vStr) );
     Vec_StrFree( vStr );
     fclose( pFile );

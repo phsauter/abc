@@ -698,6 +698,7 @@ int Scl_CommandDumpGen( Abc_Frame_t * pAbc, int argc, char **argv )
     float Slew = 0; // use the library
     float Gain = 200;
     int nGatesMin = 4;
+    int fUseAll = 0;
     int c, fVerbose = 0;
     Extra_UtilGetoptReset();
     while ( ( c = Extra_UtilGetopt( argc, argv, "SGMvh" ) ) != EOF )
@@ -737,6 +738,9 @@ int Scl_CommandDumpGen( Abc_Frame_t * pAbc, int argc, char **argv )
             if ( nGatesMin < 0 ) 
                 goto usage;
             break;
+        case 'A':
+            fUseAll ^= 1;
+            break;
         case 'v':
             fVerbose ^= 1;
             break;
@@ -753,7 +757,7 @@ int Scl_CommandDumpGen( Abc_Frame_t * pAbc, int argc, char **argv )
     }
     if ( argc == globalUtilOptind + 1 )
         pFileName = argv[globalUtilOptind];
-    Abc_SclDumpGenlib( pFileName, (SC_Lib *)pAbc->pLibScl, Slew, Gain, nGatesMin );
+    Abc_SclDumpGenlib( pFileName, (SC_Lib *)pAbc->pLibScl, Slew, Gain, fUseAll, nGatesMin );
     return 0;
 
 usage:
@@ -762,6 +766,7 @@ usage:
     fprintf( pAbc->Err, "\t-S float : the slew parameter used to generate the library [default = %.2f]\n", Slew );
     fprintf( pAbc->Err, "\t-G float : the gain parameter used to generate the library [default = %.2f]\n", Gain );
     fprintf( pAbc->Err, "\t-M num   : skip gate classes whose size is less than this [default = %d]\n", nGatesMin );
+    fprintf( pAbc->Err, "\t-A num   : Toggle generating all gates (eg multi-output) [default = %s]\n", fUseAll? "yes": "no" );
     fprintf( pAbc->Err, "\t-v       : toggle printing verbose information [default = %s]\n", fVerbose? "yes": "no" );
     fprintf( pAbc->Err, "\t-h       : print the command usage\n");
     fprintf( pAbc->Err, "\t<file>   : optional GENLIB file name\n");
